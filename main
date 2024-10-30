@@ -1,0 +1,96 @@
+from neo4j import GraphDatabase
+import os
+
+# Neo4j connection details
+uri = "bolt://localhost:7687"
+username = "neo4j"
+password = "neo4j"
+
+# Connect to Neo4j
+driver = GraphDatabase.driver(uri, auth=(username, password))
+
+
+def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000):
+    with driver.session() as session:
+        # Crea nodi per tweet e utenti
+        for tweet_id, data in tweets.items():
+            session.run(
+                "CREATE (t:Tweet {id: $id, text_content: $text_content, label: $label})",
+                id=tweet_id, text_content=data['text_content'], label=data.get('label', 'unknown')
+            )
+
+        # Processo relazioni di retweet dai file tree
+        for tweet_id in tweets.keys():
+            tree_file_path = os.path.join(path_tree_files, f'{tweet_id}.txt')
+            if os.path.exists(tree_file_path):
+                with open(tree_file_path, 'r', encoding='utf-8') as file_tree:
+                    retweet_count = 0  # Aggiungi un contatore per i retweet
+                    for line in file_tree:
+                        if retweet_count >= retweet_limit:
+                            break  # Interrompi se hai raggiunto il limite
+                        try:
+                            # Dividi la relazione parent-child
+                            parent, child = line.strip().split('->')
+                            parent = parent.strip().strip('[]').split(',')
+                            child = child.strip().strip('[]').split(',')
+
+                            parent_user_id = parent[0].strip().strip("'")
+                            parent_tweet_id = parent[1].strip().strip("'")
+
+                            child_user_id = child[0].strip().strip("'")
+                            child_tweet_id = child[1].strip().strip("'")
+
+                            # Crea il nodo utente parent e child se non esiste
+                            session.run(
+                                "MERGE (u:User {id: $user_id})",
+                                user_id=parent_user_id
+                            )
+                            session.run(
+                                "MERGE (u:User {id: $user_id})",
+                                user_id=child_user_id
+                            )
+
+                            # Crea la relazione di retweet tra i tweet
+                            session.run(
+                                """
+                                MATCH (p:Tweet {id: $parent_tweet_id})
+                                MATCH (c:Tweet {id: $child_tweet_id})
+                                MERGE (parent_user:User {id: $parent_user_id})-[:CREATES]->(p)
+                                MERGE (child_user:User {id: $child_user_id})-[:RETWEETS]->(c)
+                                """,
+                                parent_tweet_id=parent_tweet_id,
+                                child_tweet_id=child_tweet_id,
+                                parent_user_id=parent_user_id,
+                                child_user_id=child_user_id
+                            )
+                            retweet_count += 1  # Incrementa il contatore dei retweet
+
+                        except Exception as e:
+                            print(f"Error processing line: {line.strip()} - {e}")
+
+
+# Paths to the files
+path_source_tweets = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/source_tweets.txt'
+path_labels = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/label.txt'
+path_tree_files = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/treeS/'
+
+# Step 1: Import Tweets and Labels
+tweets = {}
+with open(path_source_tweets, 'r', encoding='utf-8') as file_source_tweets:
+    for line in file_source_tweets:
+        parts = line.strip().split('\t', 1)
+        if len(parts) == 2:
+            tweet_id, text_content = parts
+            tweets[tweet_id] = {'text_content': text_content}
+
+with open(path_labels, 'r', encoding='utf-8') as file_labels:
+    for line in file_labels:
+        label, tweet_id = line.strip().split(':')
+        if tweet_id in tweets:
+            tweets[tweet_id]['label'] = label
+
+# Import data to Neo4j
+import_data_to_neo4j(driver, tweets, path_tree_files)
+
+# Close the driver connection
+driver.close()
