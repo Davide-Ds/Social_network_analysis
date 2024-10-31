@@ -70,9 +70,9 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
 
 
 # Paths to the files
-path_source_tweets = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/source_tweets.txt'
-path_labels = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/label.txt'
-path_tree_files = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/treeS/'
+path_source_tweets = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/source_tweets.txt'
+path_labels = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/label.txt'
+path_tree_files = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/tree/'
 
 # Step 1: Import Tweets and Labels
 tweets = {}
