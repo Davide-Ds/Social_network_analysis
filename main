@@ -1,80 +1,107 @@
-from neo4j import GraphDatabase
 import os
+import logging
+from neo4j import GraphDatabase
 
-# Neo4j connection details
+# Configurazione del logging
+logging.basicConfig(level=logging.INFO)
+
+# Dettagli di connessione a Neo4j
 uri = "bolt://localhost:7687"
 username = "neo4j"
 password = "neo4j"
 
-# Connect to Neo4j
+# Connessione a Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
-
 
 def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000):
     with driver.session() as session:
-        # Crea nodi per tweet e utenti
+        # Crea nodi per i tweet e gli utenti originali
         for tweet_id, data in tweets.items():
-            session.run(
-                "CREATE (t:Tweet {id: $id, text_content: $text_content, label: $label})",
-                id=tweet_id, text_content=data['text_content'], label=data.get('label', 'unknown')
-            )
+            if data.get('label') in ['true', 'false']:
+                try:
+                    # Crea il nodo per il tweet originale
+                    session.run(
+                        "MERGE (t:Tweet {id: $id, text_content: $text_content, label: $label})",
+                        id=tweet_id, text_content=data['text_content'], label=data['label']
+                    )
+                    logging.info(f"Nodo Tweet {tweet_id} creato o trovato")
+
+                    # Crea il nodo per l'utente che ha creato il tweet e la relazione CREATES
+                    if 'user_id' in data:
+                        session.run(
+                            "MERGE (u:User {id: $user_id}) "
+                            "WITH u "
+                            "MATCH (t:Tweet {id: $id}) "
+                            "MERGE (u)-[:CREATES]->(t)",
+                            user_id=data['user_id'], id=tweet_id
+                        )
+                        logging.info(f"Relazione CREATES creata: User {data['user_id']} -> Tweet {tweet_id}")
+
+                except Exception as e:
+                    logging.error(f"Errore durante l'elaborazione del tweet {tweet_id}: {e}")
 
         # Processo relazioni di retweet dai file tree
+        if not os.path.isdir(path_tree_files):
+            logging.error(f"Il percorso non esiste: {path_tree_files}")
+            return
+        
         for tweet_id in tweets.keys():
             tree_file_path = os.path.join(path_tree_files, f'{tweet_id}.txt')
             if os.path.exists(tree_file_path):
                 with open(tree_file_path, 'r', encoding='utf-8') as file_tree:
-                    retweet_count = 0  # Aggiungi un contatore per i retweet
+                    retweet_count = 0
                     for line in file_tree:
                         if retweet_count >= retweet_limit:
-                            break  # Interrompi se hai raggiunto il limite
+                            break
                         try:
-                            # Dividi la relazione parent-child
+                            # Parsing della relazione parent-child
                             parent, child = line.strip().split('->')
                             parent = parent.strip().strip('[]').split(',')
                             child = child.strip().strip('[]').split(',')
 
                             parent_user_id = parent[0].strip().strip("'")
                             parent_tweet_id = parent[1].strip().strip("'")
+                            retweet_time = parent[2].strip().strip("'")  # Tempo al quale è stato retweettato
 
                             child_user_id = child[0].strip().strip("'")
                             child_tweet_id = child[1].strip().strip("'")
 
-                            # Crea il nodo utente parent e child se non esiste
-                            session.run(
-                                "MERGE (u:User {id: $user_id})",
-                                user_id=parent_user_id
-                            )
-                            session.run(
-                                "MERGE (u:User {id: $user_id})",
-                                user_id=child_user_id
-                            )
+                            # Verifica se il tweet originale esiste
+                            if parent_tweet_id in tweets and tweets[parent_tweet_id].get('label') in ['true', 'false']:
+                                # Crea il nodo per l'utente che retweetta
+                                session.run(
+                                    "MERGE (u:User {id: $user_id})",
+                                    user_id=child_user_id
+                                )
+                                logging.info(f"Nodo User {child_user_id} creato o trovato")
 
-                            # Crea la relazione di retweet tra i tweet
-                            session.run(
-                                """
-                                MATCH (p:Tweet {id: $parent_tweet_id})
-                                MATCH (c:Tweet {id: $child_tweet_id})
-                                MERGE (parent_user:User {id: $parent_user_id})-[:CREATES]->(p)
-                                MERGE (child_user:User {id: $child_user_id})-[:RETWEETS]->(c)
-                                """,
-                                parent_tweet_id=parent_tweet_id,
-                                child_tweet_id=child_tweet_id,
-                                parent_user_id=parent_user_id,
-                                child_user_id=child_user_id
-                            )
-                            retweet_count += 1  # Incrementa il contatore dei retweet
+                                # Crea il nodo per il tweet che è stato retweettato
+                                session.run(
+                                    "MERGE (t:Tweet {id: $parent_tweet_id})",
+                                    parent_tweet_id=parent_tweet_id
+                                )
+                                logging.info(f"Nodo Tweet {parent_tweet_id} creato o trovato")
+
+                                # Crea la relazione di retweet con il tempo, evitando prodotti cartesiani
+                                session.run(
+                                    "MATCH (u:User {id: $user_id}), (t:Tweet {id: $parent_tweet_id}) "
+                                    "WITH u, t "
+                                    "MERGE (u)-[:RETWEETS {time: $retweet_time}]->(t)",
+                                    user_id=child_user_id, parent_tweet_id=parent_tweet_id, retweet_time=retweet_time
+                                )
+                                logging.info(f"Relazione RETWEETS creata tra User {child_user_id} e Tweet {parent_tweet_id} con tempo {retweet_time}")
+
+                                retweet_count += 1
 
                         except Exception as e:
-                            print(f"Error processing line: {line.strip()} - {e}")
+                            logging.error(f"Errore durante l'elaborazione della relazione retweet per {parent_tweet_id}: {e}")
 
+# Percorsi dei file
+path_source_tweets = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/source_tweets.txt'
+path_labels = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/label.txt'
+path_tree_files = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter15/tree/'
 
-# Paths to the files
-path_source_tweets = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/source_tweets.txt'
-path_labels = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/label.txt'
-path_tree_files = 'C:/Users/bmarc/Downloads/rumdetect2017/rumor_detection_acl2017/twitter16/tree/'
-
-# Step 1: Import Tweets and Labels
+# Step 1: Importa Tweet e Etichette
 tweets = {}
 with open(path_source_tweets, 'r', encoding='utf-8') as file_source_tweets:
     for line in file_source_tweets:
@@ -89,8 +116,8 @@ with open(path_labels, 'r', encoding='utf-8') as file_labels:
         if tweet_id in tweets:
             tweets[tweet_id]['label'] = label
 
-# Import data to Neo4j
+# Importa i dati in Neo4j
 import_data_to_neo4j(driver, tweets, path_tree_files)
 
-# Close the driver connection
+# Chiudi la connessione
 driver.close()
