@@ -17,7 +17,7 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
     with driver.session() as session:
         # Crea nodi per i tweet e gli utenti originali
         for tweet_id, data in tweets.items():
-            if data.get('label') in ['true', 'false']: #dds: aggiungere classe non-rumor perchè il tweet è vero anche
+            if data.get('label') in ['true', 'non-rumor','false']: #dds: aggiungere classe non-rumor perchè il tweet è vero anche
                 try:
                     # Crea il nodo per il tweet originale
                     session.run(
@@ -44,8 +44,9 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
         if not os.path.isdir(path_tree_files):
             logging.error(f"Il percorso non esiste: {path_tree_files}")
             return
-        
-        for tweet_id in tweets.keys(): #dds: qui lavori su tutti i source tweets (818) ma in linea 20 crei nodi solo per le classi true e false (412). Ok filtrati dopo in ln 70
+        i = 0
+        for tweet_id in tweets.keys() and i<1:
+            i += 1 
             tree_file_path = os.path.join(path_tree_files, f'{tweet_id}.txt')
             if os.path.exists(tree_file_path):
                 with open(tree_file_path, 'r', encoding='utf-8') as file_tree:
@@ -61,13 +62,14 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
 
                             parent_user_id = parent[0].strip().strip("'")   #dds: non usato dopo
                             parent_tweet_id = parent[1].strip().strip("'")
-                            retweet_time = parent[2].strip().strip("'")  # Tempo al quale è stato retweettato. dds: sempre 0 per i source tweet, va preso dal nodo figlio
+                            parent_retweet_time = parent[2].strip().strip("'")  # Tempo al quale è stato retweettato. dds: sempre 0 per i source tweet, va preso dal nodo figlio
 
                             child_user_id = child[0].strip().strip("'")
                             child_tweet_id = child[1].strip().strip("'")  #dds: non usato dopo
-                                                                          #dds: prendere il tempo del retweet figlio
+                            child_retweet_time = child[2].strip().strip("'")
+                                                                       
                             # Verifica se il tweet originale esiste
-                            if parent_tweet_id in tweets and tweets[parent_tweet_id].get('label') in ['true', 'false']:
+                            if parent_tweet_id in tweets and tweets[parent_tweet_id].get('label') in ['true','non-rumor', 'false']:
                                 # Crea il nodo per l'utente che retweetta
                                 session.run(
                                     "MERGE (u:User {id: $user_id})",
@@ -87,9 +89,9 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
                                     "MATCH (u:User {id: $user_id}), (t:Tweet {id: $parent_tweet_id}) "
                                     "WITH u, t "
                                     "MERGE (u)-[:RETWEETS {time: $retweet_time}]->(t)",
-                                    user_id=child_user_id, parent_tweet_id=parent_tweet_id, retweet_time=retweet_time  #dds: prendere il tempo del retweet figlio
+                                    user_id=child_user_id, parent_tweet_id=parent_tweet_id, retweet_time=child_retweet_time 
                                 )
-                                logging.info(f"Relazione RETWEETS creata tra User {child_user_id} e Tweet {parent_tweet_id} con tempo {retweet_time}")
+                                logging.info(f"Relazione RETWEETS creata tra User {child_user_id} e Tweet {parent_tweet_id} con tempo {child_retweet_time}")
 
                                 retweet_count += 1
 
