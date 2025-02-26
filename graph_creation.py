@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 # Dettagli di connessione a Neo4j
 uri = "bolt://localhost:7687"
 username = "neo4j"
-password = "neo4j"
+password = "password!"
 
 # Connessione a Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
@@ -45,8 +45,10 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
             logging.error(f"Il percorso non esiste: {path_tree_files}")
             return
         i = 0
-        for tweet_id in tweets.keys() and i<1:
-            i += 1 
+        for tweet_id in tweets.keys():
+            if i >= 1: #dds: per ora solo il primo tweet
+                break
+            i += 1
             tree_file_path = os.path.join(path_tree_files, f'{tweet_id}.txt')
             if os.path.exists(tree_file_path):
                 with open(tree_file_path, 'r', encoding='utf-8') as file_tree:
@@ -60,12 +62,12 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
                             parent = parent.strip().strip('[]').split(',')
                             child = child.strip().strip('[]').split(',')
 
-                            parent_user_id = parent[0].strip().strip("'")   #dds: non usato dopo
+                            #parent_user_id = parent[0].strip().strip("'")   #dds: non usato dopo
                             parent_tweet_id = parent[1].strip().strip("'")
-                            parent_retweet_time = parent[2].strip().strip("'")  # Tempo al quale è stato retweettato. dds: sempre 0 per i source tweet, va preso dal nodo figlio
+                            #parent_retweet_time = parent[2].strip().strip("'")  # Tempo al quale è stato retweettato. dds: sempre 0 per i source tweet, va preso dal nodo figlio
 
                             child_user_id = child[0].strip().strip("'")
-                            child_tweet_id = child[1].strip().strip("'")  #dds: non usato dopo
+                            #child_tweet_id = child[1].strip().strip("'")  #dds: non usato dopo
                             child_retweet_time = child[2].strip().strip("'")
                                                                        
                             # Verifica se il tweet originale esiste
@@ -86,7 +88,8 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
 
                                 # Crea la relazione di retweet con il tempo, evitando prodotti cartesiani
                                 session.run(
-                                    "MATCH (u:User {id: $user_id}), (t:Tweet {id: $parent_tweet_id}) "
+                                    "MATCH (u:User {id: $user_id}) "
+                                    "OPTIONAL MATCH (t:Tweet {id: $parent_tweet_id}) "
                                     "WITH u, t "
                                     "MERGE (u)-[:RETWEETS {time: $retweet_time}]->(t)",
                                     user_id=child_user_id, parent_tweet_id=parent_tweet_id, retweet_time=child_retweet_time 
