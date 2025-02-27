@@ -13,6 +13,7 @@ password = "password!"
 # Connessione a Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
 
+
 def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000):
     with driver.session() as session:
         # Crea nodi per i tweet e gli utenti originali
@@ -101,6 +102,7 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
                         except Exception as e:
                             logging.error(f"Errore durante l'elaborazione della relazione retweet per {parent_tweet_id}: {e}")
 
+                            
 # Percorsi dei file
 path_source_tweets = 'rumor_detection_2017/twitter16/source_tweets.txt'
 path_labels = 'rumor_detection_2017/twitter16/label.txt'
@@ -121,8 +123,12 @@ with open(path_labels, 'r', encoding='utf-8') as file_labels:
         if tweet_id in tweets:
             tweets[tweet_id]['label'] = label
 
+#print(tweets)
+
+
 # Importa i dati in Neo4j
 import_data_to_neo4j(driver, tweets, path_tree_files)
 
 # Chiudi la connessione
 driver.close()
+
