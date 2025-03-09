@@ -6,9 +6,10 @@ from neo4j import GraphDatabase
 logging.basicConfig(level=logging.INFO)
 
 # Dettagli di connessione a Neo4j
-uri = "bolt://localhost:7687"
-username = "neo4j"
-password = "password!"
+port = os.getenv("NEO4J_PORT", "7687")  # Default 7687 se non è impostata
+uri = f"bolt://localhost:{port}"
+username = os.getenv("NEO4J_USERNAME", "neo4j")  # Default: neo4j
+password = os.getenv("NEO4J_PASSWORD", "password!")  # Default: password!
 
 # Connessione a Neo4j
 driver = GraphDatabase.driver(uri, auth=(username, password))
