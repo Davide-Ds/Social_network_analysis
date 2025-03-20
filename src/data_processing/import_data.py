@@ -74,9 +74,9 @@ def import_data_to_neo4j(driver, tweets, path_tree_files, retweet_limit=50000000
                             logging.error(f"Errore durante l'elaborazione della relazione retweet per {parent_tweet_id}: {e}")
 
 # Lettura dei file
-path_source_tweets = 'rumor_detection_2017/twitter16/source_tweets.txt'
-path_labels = 'rumor_detection_2017/twitter16/label.txt'
-path_tree_files = 'rumor_detection_2017/twitter16/tree/'
+path_source_tweets = 'data/twitter16/source_tweets.txt'
+path_labels = 'data/twitter16/label.txt'
+path_tree_files = 'data/twitter16/tree/'
 
 tweets = {}
 with open(path_source_tweets, 'r', encoding='utf-8') as file_source_tweets:
