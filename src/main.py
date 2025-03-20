@@ -1,5 +1,5 @@
 from src.utils.neo4j_utils import get_neo4j_driver
-from src.data_processing.import_data import import_data_to_neo4j
+from data_processing.import_data import import_data_to_neo4j
 import os
 
 def main():
