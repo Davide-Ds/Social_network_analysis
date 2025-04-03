@@ -176,7 +176,9 @@ def _process_batch(session, batch):
     # Usiamo APOC per creare dinamicamente il tipo di relazione
     query = """
     UNWIND $batch AS row
-    MATCH (u:User {user_id: row.user_id}), (t:Tweet {tweet_id: row.tweet_id})
+    MERGE (u:User {user_id: row.user_id})
+    MERGE (t:Tweet {tweet_id: row.tweet_id})
+    WITH u, t, row
     CALL apoc.create.relationship(u, row.relation_type, {delay: row.creation_delay}, t) YIELD rel
     RETURN count(rel) AS count
     """
