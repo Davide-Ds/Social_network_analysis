@@ -1,6 +1,7 @@
 import os
 import logging
-from neo4j import GraphDatabase
+import re
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
@@ -8,7 +9,7 @@ def load_tweets_and_labels(path_tweets, path_labels):
     """
     Carica i tweet da source_tweets.txt e li aggiorna con le etichette da label.txt.
     Formato source_tweets.txt: tweet_id <tab> text_content
-    Formato label.txt: tweet_id <tab> label
+    Formato label.txt: label:tweet_id
     """
     tweets = {}
     with open(path_tweets, 'r', encoding='utf-8') as f:
@@ -24,7 +25,7 @@ def load_tweets_and_labels(path_tweets, path_labels):
         for line in f:
             parts = line.strip().split(':')
             if len(parts) == 2:
-                label, tweet_id  = parts
+                label, tweet_id = parts
                 if tweet_id in tweets:
                     tweets[tweet_id]['label'] = label
                 else:
@@ -34,16 +35,55 @@ def load_tweets_and_labels(path_tweets, path_labels):
     
     return tweets
 
+def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, c_tweet, c_time):
+    """
+    Classifica la relazione in base ai casi descritti.
+
+    - Caso 1 (RETWEET_L1): se il nodo padre è il source S e il figlio ha lo stesso tweetId (c_time > S_time, c_user != S_user)
+    - Caso 2 (QUOTE): se il nodo padre è S e il figlio ha tweetId diverso
+    - Caso 3 (RETWEET_LN): se il nodo padre non è S, ma entrambi hanno il tweetId del source e c_time > p_time
+    - Caso 4 (ANOMALIA_TEMPO): se c_time < p_time
+    - Caso 6 (INTERACTION_RITORNO_SOURCE): se il nodo padre ha tweetId diverso e il figlio ha tweetId uguale al source
+    - Caso 7 (INTERACTION_PADRE_DEL_PADRE): se il nodo padre ha tweetId uguale al source e il figlio ha tweetId diverso
+    - Tutti gli altri casi sono classificati come INTERACTION_OTHERS.
+    """
+    if c_time < p_time:
+        return "INTERACTION"
+    
+    if p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6:
+        # Il nodo padre è il source S
+        if c_tweet == S_tweet:
+            if c_user != S_user and c_time > S_time:
+                return "RETWEET"   # Caso 1: RETWEET_L1
+            else:
+                return "INTERACTION"
+        else:
+            return "QUOTE"         # Caso 2: QUOTE
+    else:
+        # Nodo padre non è S
+        if p_tweet == S_tweet and c_tweet == S_tweet and c_time > p_time:
+            return "RETWEET"       # Caso 3: RETWEET (livello >1)
+        elif p_tweet != S_tweet and c_tweet == S_tweet:
+            return "INTERACTION"   # Caso 6: Ritorno al source tweetID
+        elif p_tweet == S_tweet and c_tweet != S_tweet:
+            return "INTERACTION"   # Caso 7: Padre del padre
+        else:
+            return "INTERACTION"   # Altri casi ambigui
+    return "INTERACTION"
+
 def process_tree_files(path_tree_files, tweets):
     """
     Processa ogni file nella cartella tree.
     Per ogni file:
       - Usa il nome del file (senza .txt) come tweet_id.
-      - Legge la prima riga per estrarre il creatore e aggiorna il dizionario tweets aggiungendo 'created_by'.
-      - Per le righe successive, estrae le relazioni RETWEET: (retweeter, tweet_id, creation_delay)
-    Restituisce una lista di tuple (retweeter, tweet_id, creation_delay).
+      - Legge la prima riga per estrarre il creatore e aggiorna il dizionario tweets con 'created_by'.
+      - Per le righe successive, estrae le relazioni e le classifica usando classify_relation.
+    Restituisce una lista di tuple:
+      (p_user, p_tweet, p_time, c_user, c_tweet, c_time, relation_type)
     """
     retweet_relations = []
+    pattern = re.compile(r"\['([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\]\s*->\s*\['([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\]")
+    
     for filename in os.listdir(path_tree_files):
         file_path = os.path.join(path_tree_files, filename)
         if os.path.isfile(file_path) and file_path.endswith('.txt'):
@@ -53,37 +93,37 @@ def process_tree_files(path_tree_files, tweets):
                 lines = f.readlines()
                 if not lines:
                     continue
-                # Estrai il creatore dalla prima riga
-                first_line = lines[0].strip()
-                if "->" in first_line:
+                # La prima riga definisce il source S
+                m = pattern.match(lines[0].strip())
+                if m:
+                    # Ignoriamo la parte sinistra e usiamo la parte destra per definire S
+                    _, _, _, S_user, S_tweet, S_time_str = m.groups()
                     try:
-                        _, right = first_line.split("->")
-                        right_values = right.replace("[", "").replace("]", "").split(", ")
-                        if len(right_values) >= 2:
-                            creator_id = right_values[0].strip("'")
-                            if tweet_id in tweets:
-                                tweets[tweet_id]['created_by'] = creator_id
-                    except Exception as e:
-                        logging.warning(f"Errore nel parsing della prima riga in {file_path}: {e}")
+                        S_time = float(S_time_str)
+                    except ValueError:
+                        S_time = 0.0
+                    if tweet_id in tweets:
+                        tweets[tweet_id]['created_by'] = S_user
                 else:
-                    logging.warning(f"Prima riga malformata in {file_path}: {first_line}")
+                    logging.warning(f"Prima riga malformata in {file_path}: {lines[0].strip()}")
+                    continue
                 
-                # Per le righe successive, estrai le relazioni RETWEET
+                # Processa le righe successive
                 for line in lines[1:]:
-                    if "->" not in line:
-                        logging.warning(f"Riga malformata in {file_path}: {line.strip()}")
+                    m = pattern.match(line.strip())
+                    if not m:
+                        logging.warning(f"Linea malformata in {file_path}: {line.strip()}")
                         continue
+                    p_user, p_tweet, p_time_str, c_user, c_tweet, c_time_str = m.groups()
                     try:
-                        _, right = line.strip().split("->")
-                        right_values = right.replace("[", "").replace("]", "").split(", ")
-                        if len(right_values) < 3:
-                            logging.warning(f"Riga malformata in {file_path}: {line.strip()}")
-                            continue
-                        retweeter = right_values[0].strip("'")
-                        creation_delay = float(right_values[2].strip("'"))
-                        retweet_relations.append((retweeter, tweet_id, creation_delay))
-                    except Exception as e:
-                        logging.warning(f"Errore nel parsing della riga in {file_path}: {e}")
+                        p_time = float(p_time_str)
+                        c_time = float(c_time_str)
+                    except ValueError:
+                        logging.warning(f"Errore conversione tempi in {file_path} linea: {line.strip()}")
+                        continue
+
+                    rel_type = classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, c_tweet, c_time)
+                    retweet_relations.append((p_user, p_tweet, p_time, c_user, c_tweet, c_time, rel_type))
     logging.info(f"Processati {len(retweet_relations)} retweet dalle tree files.")
     return retweet_relations
 
@@ -92,7 +132,6 @@ def import_tweet_nodes(driver, tweets):
         for tweet_id, data in tweets.items():
             if data.get('label') in ['true', 'non-rumor', 'false', 'unverified']:
                 try:
-                    # Aggiorna il nodo Tweet con tutte le proprietà
                     session.run(
                         """
                         MERGE (t:Tweet {tweet_id: $tweet_id})
@@ -120,12 +159,13 @@ def import_tweet_nodes(driver, tweets):
                     logging.error(f"Errore durante l'elaborazione del tweet {tweet_id}: {e}")
 
 def import_retweets(driver, retweet_relations, batch_size=1000):
-    logging.info("Importazione delle relazioni RETWEET...")
+    logging.info("Importazione delle relazioni (RETWEET, QUOTE, INTERACTION, ecc.) in Neo4j...")
     batch = []
     with driver.session() as session:
         for relation in retweet_relations:
-            user_id, tweet_id, creation_delay = relation
-            batch.append((user_id, tweet_id, creation_delay))
+            # relation: (p_user, p_tweet, p_time, c_user, c_tweet, c_time, rel_type)
+            _, tweet_id, _, c_user, _, c_time, rel_type = relation
+            batch.append((c_user, tweet_id, c_time, rel_type))
             if len(batch) >= batch_size:
                 _process_batch(session, batch)
                 batch = []
@@ -133,14 +173,21 @@ def import_retweets(driver, retweet_relations, batch_size=1000):
             _process_batch(session, batch)
 
 def _process_batch(session, batch):
+    # Usiamo APOC per creare dinamicamente il tipo di relazione
     query = """
     UNWIND $batch AS row
-    MERGE (u:User {user_id: row.user_id})
-    MERGE (t:Tweet {tweet_id: row.tweet_id})
-    MERGE (u)-[r:RETWEET {delay: row.creation_delay}]->(t)
+    MATCH (u:User {user_id: row.user_id}), (t:Tweet {tweet_id: row.tweet_id})
+    CALL apoc.create.relationship(u, row.relation_type, {delay: row.creation_delay}, t) YIELD rel
+    RETURN count(rel) AS count
     """
-    session.run(query, batch=[{"user_id": u, "tweet_id": t, "creation_delay": d} for u, t, d in batch])
-    logging.info(f"{len(batch)} relazioni RETWEET elaborate.")
+    session.run(query, batch=[{"user_id": u, "tweet_id": t, "creation_delay": d, "relation_type": rt} for u, t, d, rt in batch])
+    logging.info(f"{len(batch)} relazioni importate con tipo di relazione dinamico.")
+
+def create_indexes(driver):
+    with driver.session() as session:
+        session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")
+        session.run("CREATE INDEX IF NOT EXISTS FOR (t:Tweet) ON (t.tweet_id)")
+    logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")
 
 def get_most_retweeted_tweet(driver):
     query = """
