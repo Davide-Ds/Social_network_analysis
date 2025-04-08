@@ -37,7 +37,7 @@ def find_influencers(driver, top_n=10):
     """Trova gli utenti con il maggior numero di retweet."""
     query = """
     MATCH (u:User)-[:RETWEET]->(t:Tweet)
-    RETURN u.id AS user, count(t) AS retweet_count
+    RETURN u.user_id AS user, count(t) AS retweet_count
     ORDER BY retweet_count DESC
     LIMIT $top_n
     """
@@ -49,7 +49,7 @@ def find_influencers(driver, top_n=10):
 def analyze_diffusion_patterns(driver, tweet_id):
     """Analizza la diffusione di un tweet specifico."""
     query = """
-    MATCH path = (u:User)-[r:RETWEET*]->(t:Tweet {id: $tweet_id})
+    MATCH path = (u:User)-[r:RETWEET*]->(t:Tweet {tweet_id: $tweet_id})
     RETURN path
     """
     with driver.session() as session:
@@ -59,9 +59,10 @@ def analyze_diffusion_patterns(driver, tweet_id):
 def get_most_retweeted_tweet(driver):
     query = """
     MATCH (t:Tweet)<-[r:RETWEET]-()
-    RETURN t.id AS tweet_id
-    ORDER BY COUNT(r) DESC
-    LIMIT 1
+    RETURN t.tweet_id AS tweet_id, COUNT(r) AS retweet_count
+    ORDER BY retweet_count DESC
+LIMIT 1
+
     """
     with driver.session() as session:
         result = session.run(query)
