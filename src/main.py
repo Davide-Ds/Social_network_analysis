@@ -6,7 +6,7 @@ from src.data_processing.import_data import (
     import_retweets,
     get_most_retweeted_tweet
 )
-from src.analysis.graph_analysis import basic_statistics, find_influencers, analyze_diffusion_patterns
+from src.analysis.graph_analysis import *
 import os
 import logging
 
@@ -57,8 +57,14 @@ def main():
     logging.info(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
     diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
     logging.info(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
-    
     # 7. Chiusura della connessione a Neo4j
+    
+    # Calcola il PageRank e mostra i risultati
+    print("Calcolo del PageRank...")
+    top_users = compute_pagerank(driver, top_n=10)
+    print("Utenti più influenti (PageRank):")
+    for user in top_users:
+        print(f"User: {user['user']}, Score: {user['score']:.4f}")       
     logging.info("Chiusura della connessione a Neo4j...")
     driver.close()
 
