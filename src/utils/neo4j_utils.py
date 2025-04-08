@@ -14,4 +14,4 @@ def create_indexes(driver):
     with driver.session() as session:
         session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")
         session.run("CREATE INDEX IF NOT EXISTS FOR (t:Tweet) ON (t.tweet_id)")
-    logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")
+    logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")   
