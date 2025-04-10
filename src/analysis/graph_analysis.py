@@ -77,6 +77,22 @@ LIMIT 1
     else:
         logging.warning("Nessun tweet trovato per l'analisi.")
 
+def create_gds_graph(driver):
+    """Crea un grafo GDS chiamato 'myGraph' se non esiste già."""
+    query_drop = "CALL gds.graph.exists('myGraph') YIELD exists"
+    query_create = """
+    CALL gds.graph.project.cypher(
+        'myGraph',
+        'MATCH (u:User) RETURN id(u) AS id',
+        'MATCH (u1:User)-[:FOLLOWS]->(u2:User) RETURN id(u1) AS source, id(u2) AS target'
+    )
+    """
+    with driver.session() as session:
+        exists = session.run(query_drop).single()['exists']
+        if exists:
+            session.run("CALL gds.graph.drop('myGraph')")
+        session.run(query_create)
+
 
 def compute_pagerank(driver, top_n=10):
     """Calcola il PageRank degli utenti per trovare i più influenti nel grafo."""
