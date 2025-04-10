@@ -84,7 +84,8 @@ def create_gds_graph(driver):
     CALL gds.graph.project.cypher(
         'myGraph',
         'MATCH (u:User) RETURN id(u) AS id',
-        'MATCH (u1:User)-[:FOLLOWS]->(u2:User) RETURN id(u1) AS source, id(u2) AS target'
+        'MATCH (u1:User)-[r:CREATES|RETWEET|QUOTE|INTERACTION]->(u2:User)
+         RETURN id(u1) AS source, id(u2) AS target'
     )
     """
     with driver.session() as session:
@@ -93,16 +94,27 @@ def create_gds_graph(driver):
             session.run("CALL gds.graph.drop('myGraph')")
         session.run(query_create)
 
-
 def compute_pagerank(driver, top_n=10):
     """Calcola il PageRank degli utenti per trovare i più influenti nel grafo."""
     query = """
     CALL gds.pageRank.stream('myGraph')
     YIELD nodeId, score
-    RETURN gds.util.asNode(nodeId).id AS user, score
+    RETURN nodeId, score
     ORDER BY score DESC
     LIMIT $top_n
     """
     with driver.session() as session:
-        result = session.run(query, {"top_n": top_n})  # 🔥 IMPORTANTE: Parametro come dizionario!
-        return [{"user": record["user"], "score": record["score"]} for record in result]
+        result = session.run(query, {"top_n": top_n})
+        users = []
+        for record in result:
+            node_id = record["nodeId"]
+            score = record["score"]
+            
+            # Verifica se esiste un nodo per l'ID utente
+            user_node = session.run("MATCH (u:User) WHERE id(u) = $node_id RETURN u.user_id AS user_id", {"node_id": node_id}).single()
+            if user_node:
+                users.append({"user": user_node["user_id"], "score": score})
+            else:
+                users.append({"user": None, "score": score})  # Se non c'è il nodo, segnalalo come None
+
+        return users
