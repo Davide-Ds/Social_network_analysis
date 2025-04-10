@@ -61,6 +61,8 @@ def main():
     
     # Calcola il PageRank e mostra i risultati
     print("Calcolo del PageRank...")
+    # proiezione in memoria del grafo per calcolo del PageRank
+    create_gds_graph(driver)    
     top_users = compute_pagerank(driver, top_n=10)
     print("Utenti più influenti (PageRank):")
     for user in top_users:
