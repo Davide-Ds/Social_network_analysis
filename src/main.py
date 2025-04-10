@@ -1,12 +1,12 @@
-from src.utils.neo4j_utils import create_indexes, get_neo4j_driver
-from src.data_processing.import_data import (
+from utils.neo4j_utils import create_indexes, get_neo4j_driver
+from data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
     import_tweet_nodes,
     import_retweets,
     get_most_retweeted_tweet
 )
-from src.analysis.graph_analysis import *
+from analysis.graph_analysis import *
 import os
 import logging
 

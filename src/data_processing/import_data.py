@@ -1,7 +1,6 @@
 import os
 import logging
 import re
-import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,32 +43,38 @@ def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, 
     - Caso 3 (RETWEET_LN): se il nodo padre non è S, ma entrambi hanno il tweetId del source e c_time > p_time
     - Caso 4 (ANOMALIA_TEMPO): se c_time < p_time
     - Caso 6 (INTERACTION_RITORNO_SOURCE): se il nodo padre ha tweetId diverso e il figlio ha tweetId uguale al source
-    - Caso 7 (INTERACTION_PADRE_DEL_PADRE): se il nodo padre ha tweetId uguale al source e il figlio ha tweetId diverso
+    - Caso 7 (INTERACTION_PADRE_DEL_PADRE): un nodo è padre di un nodo che in precedenza era suo padre. User_ids e tweetIDs diversi, p_time > c_time
     - Tutti gli altri casi sono classificati come INTERACTION_OTHERS.
     """
-    if c_time < p_time:
+
+    relation = "Not Identified"
+    
+    if c_time < p_time:            #caso 4: anomalia tempo, il nodo figlio è nato prima di suo padre
         return "INTERACTION"
     
     if p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6:
         # Il nodo padre è il source S
         if c_tweet == S_tweet:
             if c_user != S_user and c_time > S_time:
-                return "RETWEET"   # Caso 1: RETWEET_L1
+                relation = "RETWEET"   # Caso 1: RETWEET_L1
             else:
-                return "INTERACTION"
+                relation = "INTERACTION"
         else:
-            return "QUOTE"         # Caso 2: QUOTE
+            relation = "QUOTE"         # Caso 2: QUOTE
     else:
         # Nodo padre non è S
         if p_tweet == S_tweet and c_tweet == S_tweet and c_time > p_time:
-            return "RETWEET"       # Caso 3: RETWEET (livello >1)
+            relation = "RETWEET"       # Caso 3: RETWEET (livello >1)
         elif p_tweet != S_tweet and c_tweet == S_tweet:
-            return "INTERACTION"   # Caso 6: Ritorno al source tweetID
+            relation = "INTERACTION"   # Caso 6: Ritorno al source tweetID
         elif p_tweet == S_tweet and c_tweet != S_tweet:
-            return "INTERACTION"   # Caso 7: Padre del padre
+            relation = "QUOTE"   # citazione di un ritweet
+        elif p_tweet != S_tweet and c_tweet != p_tweet and c_time > p_time:
+            relation = "QUOTE"   # citazione di una citazione (Quote_Ln)
         else:
-            return "INTERACTION"   # Altri casi ambigui
-    return "INTERACTION"
+            relation = "INTERACTION"   # Altri casi ambigui incluso Caso 7: Padre del padre
+    
+    return relation   
 
 def process_tree_files(path_tree_files, tweets):
     """
