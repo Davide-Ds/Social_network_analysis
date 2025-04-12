@@ -79,6 +79,7 @@ LIMIT 1
 
 def create_gds_graph(driver):
     """Crea un grafo GDS chiamato 'myGraph' se non esiste già."""
+    # Query per verificare se il grafo esiste
     query_drop = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
     CALL gds.graph.project.cypher(
@@ -88,6 +89,16 @@ def create_gds_graph(driver):
          RETURN id(u1) AS source, id(u2) AS target'
     )
     """
+    with driver.session() as session:
+        # Verifica se il grafo esiste già
+        exists = session.run(query_drop).single()['exists']
+        if exists:
+            # Se il grafo esiste, lo eliminiamo prima di crearne uno nuovo
+            session.run("CALL gds.graph.drop('myGraph')")
+        
+        # Creiamo il grafo GDS
+        session.run(query_create)
+
     with driver.session() as session:
         exists = session.run(query_drop).single()['exists']
         if exists:
