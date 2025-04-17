@@ -1,3 +1,4 @@
+from data_processing.empty_db import Neo4jCleaner
 from utils.neo4j_utils import create_indexes, get_neo4j_driver
 from data_processing.import_data import (
     load_tweets_and_labels,
@@ -9,6 +10,7 @@ from data_processing.import_data import (
 from analysis.graph_analysis import *
 import os
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,6 +19,16 @@ def main():
     path_source_tweets = os.path.join("data", "twitter16", "source_tweets.txt")
     path_labels = os.path.join("data", "twitter16", "label.txt")
     path_tree_files = os.path.join("data", "twitter16", "tree")
+
+    # Svuota il database Neo4j se pieno
+    driver = get_neo4j_driver()
+    cleaner = Neo4jCleaner(driver)  # Pass the driver directly
+    try:
+        cleaner.full_clean()
+    finally:
+        cleaner.close()
+    print("Database Neo4j vuoto/svuotato. Inizio importazione dati...")
+    time.sleep(3)  # Wait for 3 seconds
     
     # 1. Caricamento dei tweet e delle etichette
     logging.info(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
