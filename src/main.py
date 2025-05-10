@@ -28,7 +28,6 @@ def main():
     finally:
         cleaner.close()
     print("Database Neo4j vuoto/svuotato. Inizio importazione dati...")
-    time.sleep(3)  # Wait for 3 seconds
     
     # 1. Caricamento dei tweet e delle etichette
     logging.info(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
@@ -69,16 +68,17 @@ def main():
     logging.info(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
     diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
     logging.info(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
-    # 7. Chiusura della connessione a Neo4j
     
     # Calcola il PageRank e mostra i risultati
     print("Calcolo del PageRank...")
     # proiezione in memoria del grafo per calcolo del PageRank
-    create_gds_graph(driver)    
+    create_gds_graph(driver)  # Ensure this function handles graph existence without deprecated calls
     top_users = compute_pagerank(driver, 10)
     print("Utenti più influenti (PageRank):")
     for user in top_users:
         print(f"User: {user['user']}, Score: {user['score']:.4f}")       
+    
+    # 7. Chiusura della connessione a Neo4j
     logging.info("Chiusura della connessione a Neo4j...")
     driver.close()
 
