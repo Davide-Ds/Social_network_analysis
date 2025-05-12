@@ -69,7 +69,7 @@ def get_most_retweeted_tweet(driver):
 
 
 def create_gds_graph(driver):
-    """Crea un grafo GDS chiamato 'myGraph' se non esiste già."""
+    """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già."""
     query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
     CALL gds.graph.project(
