@@ -1,3 +1,4 @@
+import sys  # Import sys to handle command-line arguments
 from data_processing.empty_db import Neo4jCleaner
 from utils.neo4j_utils import create_indexes, get_neo4j_driver, serialize_path
 from data_processing.import_data import (
@@ -10,88 +11,80 @@ from data_processing.import_data import (
 from analysis.graph_analysis import *
 import os
 import logging
-import time
-import json
 
 logging.basicConfig(level=logging.INFO)
 
-def main():
+def main(mode):
     # Percorsi dei dati
     path_source_tweets = os.path.join("data", "twitter16", "source_tweets.txt")
     path_labels = os.path.join("data", "twitter16", "label.txt")
     path_tree_files = os.path.join("data", "twitter16", "tree")
 
-    # Svuota il database Neo4j se pieno
     driver = get_neo4j_driver()
-    cleaner = Neo4jCleaner(driver)  # Pass the driver directly
-    try:
-        cleaner.full_clean()
-    finally:
-        cleaner.close()
-    print("Database Neo4j vuoto/svuotato. Inizio importazione dati...")
-    time.sleep(3)  # Wait for 3 seconds
-    
-    # 1. Caricamento dei tweet e delle etichette
-    logging.info(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
-    tweets = load_tweets_and_labels(path_source_tweets, path_labels)
-    logging.info(f"{len(tweets)} tweet caricati.")
-    
-    # 2. Elaborazione dei file tree:
-    #    - Aggiorna il dizionario 'tweets' aggiungendo la proprietà 'created_by'
-    #    - Raccoglie le relazioni RETWEET come lista di tuple (retweeter, tweet_id, creation_delay)
-    logging.info("Elaborazione dei file tree per estrarre creatori e relazioni RETWEET...")
-    retweet_relations = process_tree_files(path_tree_files, tweets)
-    logging.info(f"{len(retweet_relations)} relazioni RETWEET elaborate dai file tree.")
-    
-    # 3. Connessione a Neo4j e creazione degli indici
-    logging.info("Inizio connessione a Neo4j...")
-    driver = get_neo4j_driver()
-    logging.info("Creazione degli indici...")
-    create_indexes(driver)
-    
-    # 4. Importazione dei nodi Tweet (con le proprietà aggiornate: text, tweet_label, created_by)
-    logging.info("Importazione dei nodi dei tweet (con creatore) in Neo4j...")
-    import_tweet_nodes(driver, tweets)
-    
-    # 5. Importazione delle relazioni RETWEET nel grafo
-    logging.info("Importazione delle relazioni RETWEET in Neo4j...")
-    import_retweets(driver, retweet_relations)
-    
-    # 6. Esecuzione di analisi sul grafo
-    logging.info("Recupero statistiche di base...")
-    stats = basic_statistics(driver)
-    logging.info(f"Statistiche di base: {stats}")
-    
-    logging.info("Identificazione degli influencer...")
-    influencers = find_influencers(driver)
-    logging.info(f"Influencer trovati: {influencers}")
-    
-    most_retweeted_tweet = get_most_retweeted_tweet(driver)
-    if most_retweeted_tweet:
-        logging.info(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
-        diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-        if diffusion:
-            # Serializzare la diffusione in una stringa leggibile
-            serialized = [serialize_path(p) for p in diffusion]
-            diffusion_str = json.dumps(diffusion, indent=2)
-            logging.info(f"Diffusione per il tweet {most_retweeted_tweet}:\n{diffusion_str}")
 
-        else:
-            logging.warning(f"Nessuna diffusione trovata per il tweet {most_retweeted_tweet}.")
-    else:
-        logging.warning("Nessun tweet trovato per l'analisi.")
-    # 7. Chiusura della connessione a Neo4j
-    
-    # Calcola il PageRank e mostra i risultati
-    print("Calcolo del PageRank...")
-    # proiezione in memoria del grafo per calcolo del PageRank
-    create_gds_graph(driver)    
-    top_users = compute_pagerank(driver, 10)
-    print("Utenti più influenti (PageRank):")
-    for user in top_users:
-        print(f"User: {user['user']}, Score: {user['score']:.4f}")       
+    if mode in [1, 3]:  # Caricamento dati
+        # Svuota il database Neo4j se pieno
+        cleaner = Neo4jCleaner(driver)
+        try:
+            cleaner.full_clean()
+        finally:
+            cleaner.close()
+        print("Database Neo4j vuoto/svuotato. Inizio importazione dati...")
+        
+        # 1. Caricamento dei tweet e delle etichette
+        logging.info(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
+        tweets = load_tweets_and_labels(path_source_tweets, path_labels)
+        logging.info(f"{len(tweets)} tweet caricati.")
+        
+        # 2. Elaborazione dei file tree
+        logging.info("Elaborazione dei file tree per estrarre creatori e relazioni RETWEET...")
+        retweet_relations = process_tree_files(path_tree_files, tweets)
+        logging.info(f"{len(retweet_relations)} relazioni RETWEET elaborate dai file tree.")
+        
+        # 3. Creazione degli indici e importazione dati
+        logging.info("Creazione degli indici...")
+        create_indexes(driver)
+        logging.info("Importazione dei nodi dei tweet (con creatore) in Neo4j...")
+        import_tweet_nodes(driver, tweets)
+        logging.info("Importazione delle relazioni RETWEET in Neo4j...")
+        import_retweets(driver, retweet_relations)
+
+    if mode in [2, 3]:  # Analisi
+        # 4. Esecuzione di analisi sul grafo
+        logging.info("Recupero statistiche di base...")
+        stats = basic_statistics(driver)
+        print(f"Statistiche di base: {stats}")
+        
+        logging.info("Identificazione degli influencer...")
+        influencers = find_influencers(driver)
+        print(f"Influencer trovati: {influencers}")
+        
+        most_retweeted_tweet = get_most_retweeted_tweet(driver)
+        print(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
+        diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
+        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
+        
+        # Calcolo del PageRank
+        print("Calcolo del PageRank...")
+        create_gds_graph(driver)
+        top_users = compute_pagerank(driver, 10)
+        print("Utenti più influenti (PageRank):")
+        for user in top_users:
+            print(f"User: {user['user']}, Score: {user['score']:.4f}")
+
+    # Chiusura della connessione a Neo4j
     logging.info("Chiusura della connessione a Neo4j...")
     driver.close()
 
 if __name__ == '__main__':
-    main()
+    print("Modes: 1 = Caricamento dati, 2 = Analisi, 3 = Entrambi, 0 = Esci")  # Always print the modes
+    while True:
+        mode = input("Inserisci la modalità (1, 2, 3 o 0 per uscire): ").strip()
+        if mode == "0":
+            print("Uscita dal programma.")
+            sys.exit(0)
+        if mode in {"1", "2", "3"}:
+            main(int(mode))
+            break
+        else:
+            print("Modalità non valida. Riprova.")

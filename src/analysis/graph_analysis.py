@@ -1,6 +1,3 @@
-from neo4j import GraphDatabase
-import logging
-
 def basic_statistics(driver):
     """Restituisce statistiche di base sul grafo."""
     query = """
@@ -32,6 +29,7 @@ def basic_statistics(driver):
         "num_users": num_users,
         "num_retweets": num_retweets
     }
+
 
 def find_influencers(driver, top_n=10):
     """Trova gli utenti con il maggior numero di retweet."""
@@ -73,76 +71,68 @@ def analyze_diffusion_patterns(driver, tweet_id):
 
 
 
+
 def get_most_retweeted_tweet(driver):
     query = """
     MATCH (t:Tweet)<-[r:RETWEET]-()
     RETURN t.tweet_id AS tweet_id, COUNT(r) AS retweet_count
     ORDER BY retweet_count DESC
-LIMIT 1
-
+    LIMIT 1
     """
     with driver.session() as session:
         result = session.run(query)
         record = result.single()
         return record["tweet_id"] if record else None
 
-    tweet_id = get_most_retweeted_tweet(driver)
-    if tweet_id:
-        logging.info(f"Analisi della diffusione per il tweet {tweet_id}...")
-        diffusion = analyze_diffusion_patterns(driver, tweet_id)
-        logging.info(f"Diffusione per il tweet {tweet_id}: {diffusion}")
-    else:
-        logging.warning("Nessun tweet trovato per l'analisi.")
 
 def create_gds_graph(driver):
-    """Crea un grafo GDS chiamato 'myGraph' se non esiste già."""
-    # Query per verificare se il grafo esiste
-    query_drop = "CALL gds.graph.exists('myGraph') YIELD exists"
+    """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già."""
+    query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
-    CALL gds.graph.project.cypher(
+    CALL gds.graph.project(
         'myGraph',
-        'MATCH (u:User) RETURN id(u) AS id',
-        'MATCH (u1:User)-[r:CREATES|RETWEET|QUOTE|INTERACTION]->(u2:User)
-         RETURN id(u1) AS source, id(u2) AS target'
+        {
+            User: {
+                label: 'User'
+            }
+        },
+        {
+            CREATES: {
+                type: 'CREATES',
+                orientation: 'UNDIRECTED'
+            },
+            RETWEET: {
+                type: 'RETWEET',
+                orientation: 'UNDIRECTED'
+            },
+            QUOTE: {
+                type: 'QUOTE',
+                orientation: 'UNDIRECTED'
+            },
+            INTERACTION: {
+                type: 'INTERACTION',
+                orientation: 'UNDIRECTED'
+            }
+        }
     )
     """
     with driver.session() as session:
         # Verifica se il grafo esiste già
-        exists = session.run(query_drop).single()['exists']
-        if exists:
-            # Se il grafo esiste, lo eliminiamo prima di crearne uno nuovo
-            session.run("CALL gds.graph.drop('myGraph')")
-        
-        # Creiamo il grafo GDS
-        session.run(query_create)
+        exists = session.run(query_check).single()['exists']
+        if not exists:
+            # Creiamo il grafo GDS solo se non esiste
+            session.run(query_create)
 
-    with driver.session() as session:
-        exists = session.run(query_drop).single()['exists']
-        if exists:
-            session.run("CALL gds.graph.drop('myGraph')")
-        session.run(query_create)
 
 def compute_pagerank(driver, top_n=10):
     """Calcola il PageRank degli utenti per trovare i più influenti nel grafo."""
     query = """
     CALL gds.pageRank.stream('myGraph')
     YIELD nodeId, score
-    RETURN nodeId, score
+    RETURN gds.util.asNode(nodeId).user_id AS user, score
     ORDER BY score DESC
     LIMIT $top_n
     """
     with driver.session() as session:
         result = session.run(query, {"top_n": top_n})
-        users = []
-        for record in result:
-            node_id = record["nodeId"]
-            score = record["score"]
-            
-            # Verifica se esiste un nodo per l'ID utente
-            user_node = session.run("MATCH (u:User) WHERE id(u) = $node_id RETURN u.user_id AS user_id", {"node_id": node_id}).single()
-            if user_node:
-                users.append({"user": user_node["user_id"], "score": score})
-            else:
-                users.append({"user": None, "score": score})  # Se non c'è il nodo, segnalalo come None
-
-        return users
+        return [{"user": record["user"], "score": record["score"]} for record in result]

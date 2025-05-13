@@ -2,7 +2,8 @@ import os
 import logging
 import re
 
-logging.basicConfig(level=logging.INFO)
+# Set logging level to WARNING to disable lower-level logs
+logging.basicConfig(level=logging.WARNING)
 
 def load_tweets_and_labels(path_tweets, path_labels):
     """

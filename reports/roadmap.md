@@ -9,7 +9,7 @@ Questo documento descrive una serie di obiettivi incrementali per analizzare e m
 Assicurarsi che i dati (tweet, etichette, file tree) siano puliti e strutturati correttamente per l'analisi.
 
 **Task:**
-- Verificare la corretta creazione dei nodi `Tweet` e delle relazioni `RETWEETS` in Neo4j.
+- Verificare la corretta creazione dei nodi `Tweet` e delle relazioni `RETWEET` in Neo4j.
 - Estrarre ed esportare la struttura dell'albero di diffusione (ad esempio, in formato JSON o CSV).
 
 **Metriche:**
