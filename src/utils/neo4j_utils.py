@@ -15,3 +15,13 @@ def create_indexes(driver):
         session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")
         session.run("CREATE INDEX IF NOT EXISTS FOR (t:Tweet) ON (t.tweet_id)")
     logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")   
+    
+def serialize_path(path):
+    return {
+        "nodes": [dict(node) | {"labels": list(node.labels)} for node in path.nodes],
+        "relationships": [dict(rel) | {
+            "type": rel.type,
+            "start_node_id": rel.start_node.id,
+            "end_node_id": rel.end_node.id
+        } for rel in path.relationships]
+}

@@ -45,16 +45,33 @@ def find_influencers(driver, top_n=10):
         result = session.run(query, top_n=top_n)
         return [{"user": record["user"], "retweet_count": record["retweet_count"]} for record in result]
 
-
 def analyze_diffusion_patterns(driver, tweet_id):
     """Analizza la diffusione di un tweet specifico."""
     query = """
     MATCH path = (u:User)-[r:RETWEET*]->(t:Tweet {tweet_id: $tweet_id})
-    RETURN path
+    WITH path, length(path) AS diffusion_length, COLLECT(u.username) AS users_involved
+    UNWIND relationships(path) AS retweet
+    RETURN path, diffusion_length, users_involved, COLLECT(retweet.created_at) AS retweet_dates
     """
     with driver.session() as session:
-        result = session.run(query, tweet_id=tweet_id)
-        return [record["path"] for record in result]
+        try:
+            result = session.run(query, tweet_id=tweet_id)
+            diffusion_paths = []
+            for record in result:
+                # Creazione di un dizionario per ogni percorso, con dettagli sulla diffusione
+                path_data = {
+                    "path": record["path"],
+                    "diffusion_length": record["diffusion_length"],
+                    "users_involved": record["users_involved"],
+                    "retweet_dates": record["retweet_dates"]
+                }
+                diffusion_paths.append(path_data)
+            return diffusion_paths
+        except Exception as e:
+            logging.error(f"Errore durante l'esecuzione della query: {e}")
+            return None
+
+
 
 def get_most_retweeted_tweet(driver):
     query = """

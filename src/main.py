@@ -1,5 +1,5 @@
 from data_processing.empty_db import Neo4jCleaner
-from utils.neo4j_utils import create_indexes, get_neo4j_driver
+from utils.neo4j_utils import create_indexes, get_neo4j_driver, serialize_path
 from data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
@@ -11,6 +11,7 @@ from analysis.graph_analysis import *
 import os
 import logging
 import time
+import json
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,9 +67,19 @@ def main():
     logging.info(f"Influencer trovati: {influencers}")
     
     most_retweeted_tweet = get_most_retweeted_tweet(driver)
-    logging.info(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
-    diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-    logging.info(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
+    if most_retweeted_tweet:
+        logging.info(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
+        diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
+        if diffusion:
+            # Serializzare la diffusione in una stringa leggibile
+            serialized = [serialize_path(p) for p in diffusion]
+            diffusion_str = json.dumps(diffusion, indent=2)
+            logging.info(f"Diffusione per il tweet {most_retweeted_tweet}:\n{diffusion_str}")
+
+        else:
+            logging.warning(f"Nessuna diffusione trovata per il tweet {most_retweeted_tweet}.")
+    else:
+        logging.warning("Nessun tweet trovato per l'analisi.")
     # 7. Chiusura della connessione a Neo4j
     
     # Calcola il PageRank e mostra i risultati
