@@ -100,10 +100,10 @@ def process_tree_files(path_tree_files, tweets):
                 if not lines:
                     continue
                 # La prima riga definisce il source S
-                m = pattern.match(lines[0].strip())
-                if m:
+                header = pattern.match(lines[0].strip())
+                if header:
                     # Ignoriamo la parte sinistra e usiamo la parte destra per definire S
-                    _, _, _, S_user, S_tweet, S_time_str = m.groups()
+                    _, _, _, S_user, S_tweet, S_time_str = header.groups()
                     try:
                         S_time = float(S_time_str)
                     except ValueError:
@@ -116,11 +116,11 @@ def process_tree_files(path_tree_files, tweets):
                 
                 # Processa le righe successive
                 for line in lines[1:]:
-                    m = pattern.match(line.strip())
-                    if not m:
+                    header = pattern.match(line.strip())
+                    if not header:
                         logging.warning(f"Linea malformata in {file_path}: {line.strip()}")
                         continue
-                    p_user, p_tweet, p_time_str, c_user, c_tweet, c_time_str = m.groups()
+                    p_user, p_tweet, p_time_str, c_user, c_tweet, c_time_str = header.groups()
                     try:
                         p_time = float(p_time_str)
                         c_time = float(c_time_str)
@@ -170,8 +170,11 @@ def import_retweets(driver, retweet_relations, batch_size=1000):
     with driver.session() as session:
         for relation in retweet_relations:
             # relation: (p_user, p_tweet, p_time, c_user, c_tweet, c_time, rel_type)
-            _, tweet_id, _, c_user, _, c_time, rel_type = relation
-            batch.append((c_user, tweet_id, c_time, rel_type))
+            _, p_tweet_id, _, c_user, c_tweet_id, c_time, rel_type = relation 
+            batch.append((c_user, p_tweet_id, c_time, rel_type))   # mettete il tweet padre come tweet_id
+            if p_tweet_id != c_tweet_id:   
+                batch.append((c_user, c_tweet_id, c_time, "CREATES"))  #crea un nuovo tweet per il quote del figlio
+                #TODO: aggiungere attributo create_by alla query chyper
             if len(batch) >= batch_size:
                 _process_batch(session, batch)
                 batch = []

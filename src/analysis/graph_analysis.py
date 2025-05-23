@@ -1,3 +1,6 @@
+import logging
+
+
 def basic_statistics(driver):
     """Restituisce statistiche di base sul grafo."""
     query = """

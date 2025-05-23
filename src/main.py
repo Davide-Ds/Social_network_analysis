@@ -1,4 +1,4 @@
-import sys  # Import sys to handle command-line arguments
+import sys  
 from data_processing.empty_db import Neo4jCleaner
 from utils.neo4j_utils import create_indexes, get_neo4j_driver, serialize_path
 from data_processing.import_data import (
@@ -77,7 +77,7 @@ def main(mode):
     driver.close()
 
 if __name__ == '__main__':
-    print("Modes: 1 = Caricamento dati, 2 = Analisi, 3 = Entrambi, 0 = Esci")  # Always print the modes
+    print("Modes: 1=Caricamento dati, 2=Analisi, 3=Entrambi, 0=Esci")
     while True:
         mode = input("Inserisci la modalità (1, 2, 3 o 0 per uscire): ").strip()
         if mode == "0":
