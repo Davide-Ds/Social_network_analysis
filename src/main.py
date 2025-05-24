@@ -32,22 +32,23 @@ def main(mode):
         print("Database Neo4j vuoto/svuotato. Inizio importazione dati...")
         
         # 1. Caricamento dei tweet e delle etichette
-        logging.info(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
+        print(f"Caricamento dei tweet e delle etichette da {path_source_tweets} e {path_labels}...")
         tweets = load_tweets_and_labels(path_source_tweets, path_labels)
-        logging.info(f"{len(tweets)} tweet caricati.")
+        print(f"{len(tweets)} tweet caricati.")
         
         # 2. Elaborazione dei file tree
-        logging.info("Elaborazione dei file tree per estrarre creatori e relazioni RETWEET...")
+        print("Elaborazione dei file tree per estrarre creatori e relazioni RETWEET...")
         retweet_relations = process_tree_files(path_tree_files, tweets)
-        logging.info(f"{len(retweet_relations)} relazioni RETWEET elaborate dai file tree.")
+        print(f"{len(retweet_relations)} relazioni RETWEET elaborate dai file tree.")
         
         # 3. Creazione degli indici e importazione dati
-        logging.info("Creazione degli indici...")
+        print("Creazione degli indici...")
         create_indexes(driver)
-        logging.info("Importazione dei nodi dei tweet (con creatore) in Neo4j...")
+        print("Importazione dei nodi dei tweet (con creatore) in Neo4j...")
         import_tweet_nodes(driver, tweets)
-        logging.info("Importazione delle relazioni RETWEET in Neo4j...")
+        print("Importazione delle relazioni RETWEET in Neo4j...")
         import_retweets(driver, retweet_relations)
+        print("Importazione completata.")
 
     if mode in [2, 3]:  # Analisi
         # 4. Esecuzione di analisi sul grafo

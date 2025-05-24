@@ -174,7 +174,6 @@ def import_retweets(driver, retweet_relations, batch_size=1000):
             batch.append((c_user, p_tweet_id, c_time, rel_type))   # mettete il tweet padre come tweet_id
             if p_tweet_id != c_tweet_id:   
                 batch.append((c_user, c_tweet_id, c_time, "CREATES"))  #crea un nuovo tweet per il quote del figlio
-                #TODO: aggiungere attributo create_by alla query chyper
             if len(batch) >= batch_size:
                 _process_batch(session, batch)
                 batch = []
@@ -182,11 +181,14 @@ def import_retweets(driver, retweet_relations, batch_size=1000):
             _process_batch(session, batch)
 
 def _process_batch(session, batch):
-    # Usiamo APOC per creare dinamicamente il tipo di relazione
+    # Usiamo APOC per creare dinamicamente il tipo di relazione. Se il tweet è nuovo aggiunge il creatore
     query = """
     UNWIND $batch AS row
     MERGE (u:User {user_id: row.user_id})
     MERGE (t:Tweet {tweet_id: row.tweet_id})
+    FOREACH (_ IN CASE WHEN row.relation_type = 'CREATES' THEN [1] ELSE [] END |
+        SET t.created_by = row.user_id
+    )
     WITH u, t, row
     CALL apoc.create.relationship(u, row.relation_type, {delay: row.creation_delay}, t) YIELD rel
     RETURN count(rel) AS count
