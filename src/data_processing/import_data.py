@@ -51,10 +51,8 @@ def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, 
     relation = "Not Identified"
     
     if c_time < p_time:            #caso 4: anomalia tempo, il nodo figlio è nato prima di suo padre
-        return "INTERACTION"
-    
-    if p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6:
-        # Il nodo padre è il source S
+        relation = "INTERACTION"   
+    elif p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6: # Il nodo padre è il source S
         if c_tweet == S_tweet:
             if c_user != S_user and c_time > S_time:
                 relation = "RETWEET"   # Caso 1: RETWEET_L1
@@ -62,8 +60,7 @@ def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, 
                 relation = "INTERACTION"
         else:
             relation = "QUOTE"         # Caso 2: QUOTE
-    else:
-        # Nodo padre non è S
+    else:  # Nodo padre non è S
         if p_tweet == S_tweet and c_tweet == S_tweet and c_time > p_time:
             relation = "RETWEET"       # Caso 3: RETWEET (livello >1)
         elif p_tweet != S_tweet and c_tweet == S_tweet:
@@ -167,13 +164,17 @@ def import_tweet_nodes(driver, tweets):
 def import_retweets(driver, retweet_relations, batch_size=1000):
     logging.info("Importazione delle relazioni (RETWEET, QUOTE, INTERACTION, ecc.) in Neo4j...")
     batch = []
+    existing_tweet_ids = set()
+
     with driver.session() as session:
         for relation in retweet_relations:
             # relation: (p_user, p_tweet, p_time, c_user, c_tweet, c_time, rel_type)
             _, p_tweet_id, _, c_user, c_tweet_id, c_time, rel_type = relation 
             batch.append((c_user, p_tweet_id, c_time, rel_type))   # mettete il tweet padre come tweet_id
-            if p_tweet_id != c_tweet_id:   
-                batch.append((c_user, c_tweet_id, c_time, "CREATES"))  #crea un nuovo tweet per il quote del figlio
+            existing_tweet_ids.add(p_tweet_id)
+            if rel_type=='QUOTE' and c_tweet_id not in existing_tweet_ids: #TODO:mettere controllo su tipo relazione, se quote allora aggiungi crazione
+                batch.append((c_user, c_tweet_id, c_time, "CREATES"))  # crea un nuovo tweet per il quote del figlio
+                existing_tweet_ids.add(c_tweet_id)
             if len(batch) >= batch_size:
                 _process_batch(session, batch)
                 batch = []
