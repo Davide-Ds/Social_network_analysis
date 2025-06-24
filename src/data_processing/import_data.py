@@ -164,25 +164,33 @@ def import_tweet_nodes(driver, tweets):
 def import_retweets(driver, retweet_relations, batch_size=1000):
     logging.info("Importazione delle relazioni (RETWEET, QUOTE, INTERACTION, ecc.) in Neo4j...")
     batch = []
+    user_batch = []
     existing_tweet_ids = set()
 
     with driver.session() as session:
         for relation in retweet_relations:
             # relation: (p_user, p_tweet, p_time, c_user, c_tweet, c_time, rel_type)
-            _, p_tweet_id, _, c_user, c_tweet_id, c_time, rel_type = relation 
-            batch.append((c_user, p_tweet_id, c_time, rel_type))   # mettete il tweet padre come tweet_id
+            p_user, p_tweet_id, _, c_user, c_tweet_id, c_time, rel_type = relation
+            batch.append((c_user, p_tweet_id, c_time, rel_type))  # rimuovi parent_user_id dal batch principale
+            # Crea la relazione tra utenti solo per RETWEET, includendo anche il tweet retwettato
+            if rel_type == "RETWEET":
+                user_batch.append((c_user, p_user, p_tweet_id))
             existing_tweet_ids.add(p_tweet_id)
-            if rel_type=='QUOTE' and c_tweet_id not in existing_tweet_ids: #TODO:mettere controllo su tipo relazione, se quote allora aggiungi crazione
-                batch.append((c_user, c_tweet_id, c_time, "CREATES"))  # crea un nuovo tweet per il quote del figlio
+            if rel_type == 'QUOTE' and c_tweet_id not in existing_tweet_ids:
+                batch.append((c_user, c_tweet_id, c_time, "CREATES"))
                 existing_tweet_ids.add(c_tweet_id)
             if len(batch) >= batch_size:
                 _process_batch(session, batch)
                 batch = []
+            if len(user_batch) >= batch_size:
+                _process_user_batch(session, user_batch)
+                user_batch = []
         if batch:
             _process_batch(session, batch)
+        if user_batch:
+            _process_user_batch(session, user_batch)
 
 def _process_batch(session, batch):
-    # Usiamo APOC per creare dinamicamente il tipo di relazione. Se il tweet è nuovo aggiunge il creatore
     query = """
     UNWIND $batch AS row
     MERGE (u:User {user_id: row.user_id})
@@ -194,8 +202,22 @@ def _process_batch(session, batch):
     CALL apoc.create.relationship(u, row.relation_type, {delay: row.creation_delay}, t) YIELD rel
     RETURN count(rel) AS count
     """
-    session.run(query, batch=[{"user_id": u, "tweet_id": t, "creation_delay": d, "relation_type": rt} for u, t, d, rt in batch])
+    session.run(query, batch=[
+        {"user_id": u, "tweet_id": t, "creation_delay": d, "relation_type": rt}
+        for u, t, d, rt in batch
+    ])
     logging.info(f"{len(batch)} relazioni importate con tipo di relazione dinamico.")
+
+def _process_user_batch(session, user_batch):
+    # Crea la relazione RETWEETED_FROM tra utenti e aggiungi l'id del tweet retwettato come attributo
+    query = """
+    UNWIND $batch AS row
+    MERGE (child:User {user_id: row.child_user})
+    MERGE (parent:User {user_id: row.parent_user})
+    MERGE (child)-[r:RETWEETED_FROM {tweet_id: row.tweet_id}]->(parent)
+    """
+    session.run(query, batch=[{"child_user": c, "parent_user": p, "tweet_id": t} for c, p, t in user_batch])
+    logging.info(f"{len(user_batch)} relazioni RETWEETED_FROM importate tra utenti.")
 
 def create_indexes(driver):
     with driver.session() as session:
