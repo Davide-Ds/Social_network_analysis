@@ -72,9 +72,6 @@ def analyze_diffusion_patterns(driver, tweet_id):
             logging.error(f"Errore durante l'esecuzione della query: {e}")
             return None
 
-
-
-
 def get_most_retweeted_tweet(driver):
     query = """
     MATCH (t:Tweet)<-[r:RETWEET]-()

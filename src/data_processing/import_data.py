@@ -224,18 +224,3 @@ def create_indexes(driver):
         session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")
         session.run("CREATE INDEX IF NOT EXISTS FOR (t:Tweet) ON (t.tweet_id)")
     logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")
-
-def get_most_retweeted_tweet(driver):
-    query = """
-    MATCH (t:Tweet)<-[r:RETWEET]-()
-    RETURN t.tweet_id AS tweet_id, COUNT(r) AS num_retweets
-    ORDER BY num_retweets DESC
-    LIMIT 1
-    """
-    with driver.session() as session:
-        result = session.run(query)
-        record = result.single()
-        if record:
-            return record["tweet_id"]
-        else:
-            return None

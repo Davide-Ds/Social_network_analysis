@@ -6,7 +6,6 @@ from data_processing.import_data import (
     process_tree_files,
     import_tweet_nodes,
     import_retweets,
-    get_most_retweeted_tweet
 )
 from analysis.graph_analysis import *
 import os
