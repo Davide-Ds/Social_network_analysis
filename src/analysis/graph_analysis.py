@@ -3,39 +3,21 @@ import logging
 
 def basic_statistics(driver):
     """Restituisce statistiche di base sul grafo."""
-    query = """
-    MATCH (t:Tweet)
-    RETURN count(t) AS num_tweets
-    """
-    with driver.session() as session:
-        result = session.run(query)
-        num_tweets = result.single()["num_tweets"]
-    
-    query = """
-    MATCH (u:User)
-    RETURN count(u) AS num_users
-    """
-    with driver.session() as session:
-        result = session.run(query)
-        num_users = result.single()["num_users"]
-    
-    query = """
-    MATCH (:User)-[r:RETWEET]->(:Tweet)
-    RETURN count(r) AS num_retweets
-    """
-    with driver.session() as session:
-        result = session.run(query)
-        num_retweets = result.single()["num_retweets"]
-    
-    return {
-        "num_tweets": num_tweets,
-        "num_users": num_users,
-        "num_retweets": num_retweets
+    stats_queries = {
+        "num_tweets": "MATCH (t:Tweet) RETURN count(t) AS value",
+        "num_users": "MATCH (u:User) RETURN count(u) AS value",
+        "num_retweets": "MATCH (:User)-[r:RETWEET]->(:Tweet) RETURN count(r) AS value"
     }
+    stats = {}
+    with driver.session() as session:
+        for key, query in stats_queries.items():
+            result = session.run(query)
+            stats[key] = result.single()["value"]
+    return stats
 
 
-def find_influencers(driver, top_n=10):
-    """Trova gli utenti con il maggior numero di retweet."""
+def find_frequent_retwetters(driver, top_n=10):
+    """Trova gli utenti che retweettano maggiormente."""
     query = """
     MATCH (u:User)-[:RETWEET]->(t:Tweet)
     RETURN u.user_id AS user, count(t) AS retweet_count
@@ -103,6 +85,10 @@ def create_gds_graph(driver):
             },
             RETWEET: {
                 type: 'RETWEET',
+                orientation: 'UNDIRECTED'
+            },
+            RETWEETED_FROM: {
+                type: 'RETWEETED_FROM',
                 orientation: 'UNDIRECTED'
             },
             QUOTE: {

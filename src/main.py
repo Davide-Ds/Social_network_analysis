@@ -55,19 +55,19 @@ def main(mode):
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
         
-        logging.info("Identificazione degli influencer...")
-        influencers = find_influencers(driver)
-        print(f"Influencer trovati: {influencers}")
+        logging.info("Identificazione degli utenti che retweettano maggiormente...")
+        frequent_retweeters = find_frequent_retwetters(driver)
+        print(f"Utenti trovati: {frequent_retweeters}")
         
-        most_retweeted_tweet = get_most_retweeted_tweet(driver)
+        """most_retweeted_tweet = get_most_retweeted_tweet(driver)
         print(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
         diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
+        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")"""
         
         # Calcolo del PageRank
         print("Calcolo del PageRank...")
         create_gds_graph(driver)
-        top_users = compute_pagerank(driver, 10)
+        top_users = compute_pagerank(driver, 1000)
         print("Utenti più influenti (PageRank):")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.4f}")
