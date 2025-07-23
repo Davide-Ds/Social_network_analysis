@@ -54,6 +54,10 @@ def main(mode):
         logging.info("Recupero statistiche di base...")
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
+
+        print("Identificazione degli utenti più retweettati...")
+        most_retweeted = find_most_retweeted_users(driver)
+        print(f"Utenti trovati: {most_retweeted}")
         
         print("Identificazione degli utenti che retweettano maggiormente...")
         frequent_retweeters = find_frequent_retwetters(driver)
@@ -70,7 +74,7 @@ def main(mode):
         top_users = compute_pagerank(driver, 20)
         print("Utenti più influenti (PageRank):")
         for user in top_users:
-            print(f"User: {user['user']}, Score: {user['score']:.4f}")
+            print(f"User: {user['user']}, Score: {user['score']:.2f}")
 
     # Chiusura della connessione a Neo4j
     logging.info("Chiusura della connessione a Neo4j...")

@@ -15,7 +15,6 @@ def basic_statistics(driver):
             stats[key] = result.single()["value"]
     return stats
 
-
 def find_frequent_retwetters(driver, top_n=10):
     """Trova gli utenti che retweettano maggiormente."""
     query = """
@@ -27,6 +26,21 @@ def find_frequent_retwetters(driver, top_n=10):
     with driver.session() as session:
         result = session.run(query, top_n=top_n)
         return [{"user": record["user"], "retweet_count": record["retweet_count"]} for record in result]
+
+def find_most_retweeted_users(driver, top_n=10):
+    """
+    Trova gli n utenti con il maggior numero di utenti distinti che li hanno retweettati.
+    """
+    query = """
+    MATCH (u:User)<-[:RETWEETED_FROM]-(r:User)
+    WITH u, COUNT(DISTINCT r) AS num_retweeters
+    ORDER BY num_retweeters DESC
+    LIMIT 20
+    RETURN u.user_id AS user, num_retweeters
+    """
+    with driver.session() as session:
+        result = session.run(query, top_n=top_n)
+        return [{"user": record["user"], "num_retweeters": record["num_retweeters"]} for record in result]
 
 def analyze_diffusion_patterns(driver, tweet_id):
     """Analizza la diffusione di un tweet specifico."""
