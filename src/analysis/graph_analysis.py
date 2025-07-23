@@ -68,7 +68,7 @@ def get_most_retweeted_tweet(driver):
 
 
 def create_gds_graph(driver):
-    """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già."""
+    """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già. Natural orientation usa la direzione nel db, meglio per il page rank"""
     query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
     CALL gds.graph.project(
@@ -81,23 +81,23 @@ def create_gds_graph(driver):
         {
             CREATES: {
                 type: 'CREATES',
-                orientation: 'UNDIRECTED'
+                orientation: 'NATURAL'      
             },
             RETWEET: {
                 type: 'RETWEET',
-                orientation: 'UNDIRECTED'
+                orientation: 'NATURAL'
             },
             RETWEETED_FROM: {
                 type: 'RETWEETED_FROM',
-                orientation: 'UNDIRECTED'
+                orientation: 'NATURAL'
             },
             QUOTE: {
                 type: 'QUOTE',
-                orientation: 'UNDIRECTED'
+                orientation: 'NATURAL'
             },
             INTERACTION: {
                 type: 'INTERACTION',
-                orientation: 'UNDIRECTED'
+                orientation: 'NATURAL'
             }
         }
     )
