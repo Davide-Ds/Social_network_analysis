@@ -1,6 +1,6 @@
 import sys  
 from data_processing.empty_db import Neo4jCleaner
-from utils.neo4j_utils import create_indexes, get_neo4j_driver, serialize_path
+from utils.neo4j_utils import create_indexes, get_neo4j_driver
 from data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
@@ -9,9 +9,10 @@ from data_processing.import_data import (
 )
 from analysis.graph_analysis import *
 import os
-import logging
+from logs.log_writer import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()  # Usa la cartella "utils" di default
+
 
 def main(mode):
     # Percorsi dei dati
@@ -51,7 +52,7 @@ def main(mode):
 
     if mode in [2, 3]:  # Analisi
         # 4. Esecuzione di analisi sul grafo
-        logging.info("Recupero statistiche di base...")
+        print("Recupero statistiche di base...")
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
 
@@ -63,10 +64,10 @@ def main(mode):
         frequent_retweeters = find_frequent_retwetters(driver)
         print(f"Utenti trovati: {frequent_retweeters}")
         
-        """most_retweeted_tweet = get_most_retweeted_tweet(driver)                          
+        most_retweeted_tweet = '498430783699554305' #get_most_retweeted_tweet(driver)                          
         print(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
         diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")"""
+        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
         
         # Calcolo del PageRank
         print("Calcolo del PageRank...")
@@ -77,11 +78,11 @@ def main(mode):
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
 
     # Chiusura della connessione a Neo4j
-    logging.info("Chiusura della connessione a Neo4j...")
+    print("Chiusura della connessione a Neo4j...")
     driver.close()
 
 if __name__ == '__main__':
-    print("Modes: 1=Caricamento dati, 2=Analisi, 3=Entrambi, 0=Esci")
+    print("Modes: 1 = Caricamento dati, 2 = Analisi, 3 = Entrambi, 0 = Esci")
     while True:
         mode = input("Inserisci la modalità (1, 2, 3 o 0 per uscire): ").strip()
         if mode == "0":

@@ -66,7 +66,7 @@ def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, 
         elif p_tweet != S_tweet and c_tweet == S_tweet:
             relation = "INTERACTION"   # Caso 6: Ritorno al source tweetID
         elif p_tweet == S_tweet and c_tweet != S_tweet:
-            relation = "QUOTE"   # citazione di un ritweet
+            relation = "QUOTE"   # citazione di un retweet
         elif p_tweet != S_tweet and c_tweet != p_tweet and c_time > p_time:
             relation = "QUOTE"   # citazione di una citazione (Quote_Ln)
         else:
