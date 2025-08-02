@@ -94,7 +94,7 @@ def analyze_diffusion_patterns(driver, tweet_id):
             return diffusion_levels
         except Exception as e:
             logging.error(f"Errore durante l'esecuzione della query: {e}")
-            return None
+            return []
 
 
 def get_most_retweeted_tweet(driver):
@@ -165,3 +165,42 @@ def compute_pagerank(driver, top_n=10):
     with driver.session() as session:
         result = session.run(query, {"top_n": top_n})
         return [{"user": record["user"], "score": record["score"]} for record in result]
+
+
+def get_top_fake_news_creators(driver, top_n=10):
+    """Restituisce i principali creatori di fake news con dettagli sui loro tweet e retweet."""
+    query = """
+    MATCH (u:User)-[:CREATES]->(t:Tweet)
+    WHERE t.tweet_label = 'false'
+
+    WITH u, collect(t.tweet_id) AS fake_tweet_ids
+
+    WITH u, fake_tweet_ids, size(fake_tweet_ids) AS num_fake_tweets
+
+    OPTIONAL MATCH (other:User)-[r:RETWEETED_FROM]->(target:User)
+    WHERE r.tweet_id IN fake_tweet_ids
+
+    RETURN 
+      u.user_id AS user_id,
+      num_fake_tweets,
+      COUNT(r) AS total_retweets_on_fake,
+      fake_tweet_ids
+    ORDER BY num_fake_tweets DESC, total_retweets_on_fake DESC
+    LIMIT $top_n
+    """
+    with driver.session() as session:
+        try:
+            result = session.run(query, {"top_n": top_n})
+            top_creators = []
+            for record in result:
+                creator_data = {
+                    "user_id": record["user_id"],
+                    "num_fake_tweets": record["num_fake_tweets"],
+                    "total_retweets_on_fake": record["total_retweets_on_fake"],
+                    "fake_tweet_ids": record["fake_tweet_ids"],
+                }
+                top_creators.append(creator_data)
+            return top_creators
+        except Exception as e:
+            logging.error(f"Errore durante l'esecuzione della query: {e}")
+            return []

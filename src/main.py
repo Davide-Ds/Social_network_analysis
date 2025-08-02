@@ -52,30 +52,39 @@ def main(mode):
 
     if mode in [2, 3]:  # Analisi
         # 4. Esecuzione di analisi sul grafo
-        print("Recupero statistiche di base...")
+        print("\n Recupero statistiche di base...")
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
 
-        print("Identificazione degli utenti più retweettati...")
+        print("\nIdentificazione degli utenti più retweettati...")
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Utenti trovati: {most_retweeted}")
         
-        print("Identificazione degli utenti che retweettano maggiormente...")
+        print("\n Identificazione degli utenti che retweettano maggiormente...")
         frequent_retweeters = find_frequent_retwetters(driver)
         print(f"Utenti trovati: {frequent_retweeters}")
         
-        most_retweeted_tweet = '498430783699554305' #get_most_retweeted_tweet(driver)                          
-        print(f"Analisi della diffusione per il tweet {most_retweeted_tweet}...")
+        most_retweeted_tweet = get_most_retweeted_tweet(driver)                          
+        print(f"\n Analisi della diffusione per il tweet {most_retweeted_tweet}...")
         diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-        print(f"Diffusione per il tweet {most_retweeted_tweet}: {diffusion}")
-        
+        print(f"Diffusione per il tweet {most_retweeted_tweet}:")
+        for level in diffusion:
+            print(f"Tree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}, Users at level: {level['users_at_level']}\n")  #paths_at_level: {level["paths_at_level"]}
+
         # Calcolo del PageRank
-        print("Calcolo del PageRank...")
+        print("\n Calcolo del PageRank...")
         create_gds_graph(driver)
-        top_users = compute_pagerank(driver, 20)
+        top_users = compute_pagerank(driver, 10)
         print("Utenti più influenti (PageRank):")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
+        
+        #Trova i maggiori creatori di fake news
+        print("\n Analisi dei creatori di fake news...")
+        top_fake_news_creators = get_top_fake_news_creators(driver, 10)
+        print("Creatori di fake news più influenti:")
+        for creator in top_fake_news_creators:
+            print(f"User: {creator['user_id']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
 
     # Chiusura della connessione a Neo4j
     print("Chiusura della connessione a Neo4j...")
