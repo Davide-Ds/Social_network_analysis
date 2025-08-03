@@ -45,7 +45,7 @@ class Neo4jCleaner:
             constraints = session.run("SHOW CONSTRAINTS")
             for record in constraints:
                 name = record["name"]
-                print(f"🧨 Eliminazione vincolo: {name}")
+                print(f" Eliminazione vincolo: {name}")
                 session.run(f"DROP CONSTRAINT {name}")
 
     def drop_indexes(self):
@@ -56,7 +56,7 @@ class Neo4jCleaner:
             indexes = session.run("SHOW INDEXES")
             for record in indexes:
                 name = record["name"]
-                print(f"🧨 Eliminazione indice: {name}")
+                print(f" Eliminazione indice: {name}")
                 session.run(f"DROP INDEX {name}")
 
     def delete_all_data(self):
@@ -73,10 +73,10 @@ class Neo4jCleaner:
         RETURN batches, total
         """
         with self.driver.session() as session:
-            print("🚀 Avvio cancellazione nodi con APOC...")
+            print(" Avvio cancellazione nodi con APOC...")
             result = session.run(apoc_query)
             summary = result.single()
-            print(f"✅ Completato: {summary['total']} nodi in {summary['batches']} batch.")
+            print(f"Completato: {summary['total']} nodi in {summary['batches']} batch.")
 
     def is_database_empty(self):
         """
@@ -96,9 +96,9 @@ class Neo4jCleaner:
         3. Deleting all nodes and relationships.
         """
         if self.is_database_empty():
-            print("ℹ️  The database is already empty. No cleanup is required.")
+            print("The database is already empty. No cleanup is required.")
             return
-        print("Database non vuoto,🧹 Inizio pulizia del database Neo4j...")
+        print("Database non vuoto, Inizio pulizia del database Neo4j...")
         self.drop_constraints()
         self.drop_indexes()
         self.delete_all_data()
