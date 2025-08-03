@@ -116,4 +116,80 @@ Questa roadmap ti guiderà attraverso fasi incrementali che ti permetteranno di:
 
 ---
 
+ALTRI SPUNTI INTERESSANTI:
+Identificazione di "strutture di Moebius" e analisi delle proprietà semantiche della rete di diffusione.
+
+Propagazione dell’informazione come un triangolo di Sierpinski
+Obiettivo: modellare la struttura gerarchica e la diffusione delle notizie (vere/fake) come una rete frattale
+Algoritmi ML:
+
+GNN (Graph Neural Networks) per modellare la struttura ad albero
+
+Clustering gerarchico o spectral clustering per identificare schemi frattali
+
+Anomaly detection per pattern di diffusione anomali
+
+Creatività:
+Il triangolo di Sierpinski è un esempio di struttura auto-similare → potresti cercare sotto-alberi o pattern ricorrenti nelle conversazioni su Twitter, dove ogni sotto-conversazione replica un pattern più grande. Le fake news potrebbero avere un pattern di diffusione più “caotico” (meno simile a una struttura frattale regolare).
+
+♟ 2. Strategie di diffusione e l’equilibrio di Nash
+Obiettivo: modellare gli utenti come giocatori razionali o rumorosi in un gioco di diffusione dell’informazione
+Algoritmi ML:
+
+Reinforcement Learning per apprendere strategie di diffusione
+
+Imitation learning o modeling via Graph Attention Networks
+
+Multi-agent modeling con payoff legati alla diffusione
+
+Creatività:
+Modelli gli utenti come agenti che decidono se diffondere o meno un’informazione, tenendo conto delle ricompense sociali (retweet, approvazione, engagement). Il concetto di equilibrio di Nash entra nel gioco: in una rete, alcuni utenti diffondono fake news perché conviene farlo in quel contesto.
+
+🧠 3. Classificare la veridicità tramite graph-based feature learning
+Obiettivo: classificare se una notizia è vera/falsa analizzando il grafo di risposta
+Algoritmi ML:
+
+GCN (Graph Convolutional Network) o GraphSAGE
+
+XGBoost su feature estratte da struttura e contenuto
+
+BERT + Graph features
+
+Creatività:
+Puoi introdurre un indice di entropia dell’informazione: i thread più controversi o disinformativi mostrano più disordine nel grafo (più rami, risposte opposte, etc.). Lo puoi confrontare con concetti da fisica/statistica.
+
+🔄 4. Previsione della diffusione futura
+Obiettivo: dato un tweet iniziale, prevedere quante interazioni avrà
+Algoritmi ML:
+
+Regressione con Random Forest / XGBoost
+
+LSTM (se usi dati temporali)
+
+Survival analysis per previsione del tempo di “morte” di una notizia
+
+Creatività:
+Puoi ispirarti al concetto di modello epidemiologico (SIR/SIS):
+
+Tweet = agente infetto
+
+follower = suscettibili
+
+puoi modellare la probabilità che un follower “si infetti” (retweet)
+→ analogia con la teoria delle epidemie
+
+📉 5. Feature importance e “causalità apparente” nei dati
+Obiettivo: capire quali feature (profilo utente, linguaggio, grafo) influenzano la percezione di verità
+Algoritmi ML:
+
+Shapley Values (SHAP)
+
+Causal Forest
+
+Permutation Feature Importance
+
+Creatività:
+Usa la teoria dei giochi cooperativi: Shapley value assegna importanza alle feature come se fossero giocatori che cooperano per ottenere una predizione. È un bell'aggancio concettuale per spiegare la "responsabilità" di ogni variabile nella predizione finale.
+
+
 *Fine del documento.*
