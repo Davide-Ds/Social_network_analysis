@@ -84,7 +84,7 @@ def main(mode):
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
         print("Creatori di fake news più influenti:")
         for creator in top_fake_news_creators:
-            print(f"User: {creator['user_id']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
+            print(f"User: {creator['user_id']}, Total tweets: {creator["total_tweets"]}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
 
     # Chiusura della connessione a Neo4j
     print("Chiusura della connessione a Neo4j...")

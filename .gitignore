@@ -172,4 +172,4 @@ data/twitter15
 .vscode/settings.json
 
 # Logs
-src\logs
+src/logs
