@@ -14,7 +14,6 @@ Misurare la dimensione frattale (ad es. con il metodo del box-counting) per valu
 import numpy as np
 import networkx as nx
 import networkx as nx
-from utils.neo4j_utils import get_retweet_subgraph
 
 def calculate_fractal_dimension_from_neo4j(driver, tweet_id: str, min_box_size: int = 1, max_box_size: int = 15) -> float:
     """
