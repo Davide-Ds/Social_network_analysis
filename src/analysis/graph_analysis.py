@@ -171,17 +171,22 @@ def get_top_fake_news_creators(driver, top_n=10):
     """Restituisce i principali creatori di fake news con dettagli sui loro tweet e retweet."""
     query = """
     MATCH (u:User)-[:CREATES]->(t:Tweet)
-    WHERE t.tweet_label = 'false'
+    WITH u, 
+         collect(t) AS all_tweets,
+         [tweet IN collect(t) WHERE tweet.tweet_label = 'false' | tweet.tweet_id] AS fake_tweet_ids
 
-    WITH u, collect(t.tweet_id) AS fake_tweet_ids
-
-    WITH u, fake_tweet_ids, size(fake_tweet_ids) AS num_fake_tweets
+    WITH 
+      u, 
+      fake_tweet_ids,
+      size(fake_tweet_ids) AS num_fake_tweets,
+      size(all_tweets) AS total_tweets
 
     OPTIONAL MATCH (other:User)-[r:RETWEETED_FROM]->(target:User)
     WHERE r.tweet_id IN fake_tweet_ids
 
     RETURN 
       u.user_id AS user_id,
+      total_tweets,
       num_fake_tweets,
       COUNT(r) AS total_retweets_on_fake,
       fake_tweet_ids
@@ -195,6 +200,7 @@ def get_top_fake_news_creators(driver, top_n=10):
             for record in result:
                 creator_data = {
                     "user_id": record["user_id"],
+                    "total_tweets": record["total_tweets"],
                     "num_fake_tweets": record["num_fake_tweets"],
                     "total_retweets_on_fake": record["total_retweets_on_fake"],
                     "fake_tweet_ids": record["fake_tweet_ids"],
