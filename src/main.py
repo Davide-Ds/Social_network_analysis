@@ -11,6 +11,7 @@ from analysis.graph_analysis import *
 import os
 from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension_from_neo4j
+from analysis.moebius_analysis import MoebiusAnalyzer
 
 setup_logging()  # Usa la cartella "utils" di default
 
@@ -77,6 +78,13 @@ def main(mode):
         print(f"\n Dimensione frattale stimata per il tweet {most_retweeted_tweet}: {fractal_dimension:.4f}")
         if fractal_dimension < 0:
             print("Attenzione: dimensione frattale negativa, stima non significativa.")
+        
+        print("\n Identifying Möbius structures in the social graph...")
+        moebius = MoebiusAnalyzer(driver)
+        try:
+            moebius.show_and_visualize_structures(limit=5)
+        finally:
+            moebius.close()
         # Calcolo del PageRank
         print("\n Calcolo del PageRank...")
         create_gds_graph(driver)
@@ -90,7 +98,7 @@ def main(mode):
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
         print("Creatori di fake news più influenti:")
         for creator in top_fake_news_creators:
-            print(f"User: {creator['user_id']}, Total tweets: {creator["total_tweets"]}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
+            print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
 
     # Chiusura della connessione a Neo4j
     print("Chiusura della connessione a Neo4j...")
