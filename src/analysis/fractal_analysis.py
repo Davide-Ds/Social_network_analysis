@@ -15,7 +15,7 @@ import numpy as np
 import networkx as nx
 import networkx as nx
 
-def calculate_fractal_dimension_from_neo4j(driver, tweet_id: str, min_box_size: int = 1, max_box_size: int = 15) -> float:
+def calculate_fractal_dimension_from_neo4j(driver, tweet_id: str, min_box_size: int = 1, max_box_size: int = 5) -> float:
     """
     Calcola una stima della dimensione frattale della struttura di retweet di un tweet
     usando solo query Cypher su Neo4j (senza NetworkX).
@@ -78,4 +78,4 @@ def calculate_fractal_dimension_from_neo4j(driver, tweet_id: str, min_box_size: 
     fractal_dimension = coeffs[0]
     if fractal_dimension < 0:
         print("Attenzione: dimensione frattale negativa, stima non significativa.")
-    return
+    return float(fractal_dimension) if fractal_dimension is not None else 0.0
