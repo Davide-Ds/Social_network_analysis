@@ -10,7 +10,7 @@ from data_processing.import_data import (
 from analysis.graph_analysis import *
 import os
 from logs.log_writer import setup_logging
-from analysis.fractal_analysis import calculate_fractal_dimension_from_neo4j
+from analysis.fractal_analysis import calculate_fractal_dimension
 from analysis.moebius_analysis import MoebiusAnalyzer
 
 setup_logging()  # Usa la cartella "utils" di default
@@ -53,8 +53,9 @@ def main(mode):
         print("Importazione completata.")
 
     if mode in [2, 3]:  # Analisi
+        
         # 4. Esecuzione di analisi sul grafo
-        print("\n Recupero statistiche di base...")
+        print("\nRecupero statistiche di base...")
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
 
@@ -62,39 +63,39 @@ def main(mode):
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Utenti trovati: {most_retweeted}")
         
-        print("\n Identificazione degli utenti che retweettano maggiormente...")
+        print("\nIdentificazione degli utenti che retweettano maggiormente...")
         frequent_retweeters = find_frequent_retwetters(driver)
         print(f"Utenti trovati: {frequent_retweeters}")
         
         most_retweeted_tweet = get_most_retweeted_tweet(driver)                                 
-        print(f"\n Analisi della diffusione per il tweet {most_retweeted_tweet}...")
+        print(f"\nAnalisi della diffusione per il tweet {most_retweeted_tweet}...")
         diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
-        print(f"\n Diffusione per il tweet {most_retweeted_tweet}:")
+        print(f"\nDiffusione per il tweet {most_retweeted_tweet}:")
         for level in diffusion:
             print(f"Tree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}, Users at level: {level['users_at_level']}\n")  #paths_at_level: {level["paths_at_level"]}
-
-        print("\n Calcolo della dimensione frattale della struttura del tweet più retweettato...")
-        fractal_dimension = calculate_fractal_dimension_from_neo4j(driver, most_retweeted_tweet)
-        print(f"\n Dimensione frattale stimata per il tweet {most_retweeted_tweet}: {fractal_dimension:.4f}")
-        if fractal_dimension < 0:
-            print("Attenzione: dimensione frattale negativa, stima non significativa.")
+     
+        #most_retweeted_tweet = '525060425184858112'  #
+        #To-do: analizzare le dimensioni frattali in base alla classe dei tweet, provati:731166399389962242+U,681824512120324096+NR,525060425184858112-T,614467824313106432+T,553589051044151296-T,658462819667615744+F,667534186450825216+F,637868242560638980+Fmrt,612841482823729152+F,498430783699554305-T,626739062792032256+F
+        print(f"\nCalcolo della dimensione frattale")
+        calculate_fractal_dimension(driver, max_box_size= 10)       
         
-        print("\n Identifying Möbius structures in the social graph...")
+        """print("\nIdentifying Möbius structures in the social graph...")
         moebius = MoebiusAnalyzer(driver)
         try:
             moebius.show_and_visualize_structures(limit=5)
         finally:
-            moebius.close()
+            moebius.close()"""
+            
         # Calcolo del PageRank
-        print("\n Calcolo del PageRank...")
+        print("\nCalcolo del PageRank...")
         create_gds_graph(driver)
         top_users = compute_pagerank(driver, 10)
-        print("Utenti più influenti (PageRank):")
+        print("Utenti più influenti:")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
         
         #Trova i maggiori creatori di fake news
-        print("\n Analisi dei creatori di fake news...")
+        print("\nAnalisi dei creatori di fake news...")
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
         print("Creatori di fake news più influenti:")
         for creator in top_fake_news_creators:
