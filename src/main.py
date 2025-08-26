@@ -59,6 +59,10 @@ def main(mode):
         stats = basic_statistics(driver)
         print(f"Statistiche di base: {stats}")
 
+        print("\nRecupero statistiche sulle classi...")
+        class_statistics = get_class_stats(driver)
+        print(f"Statistiche per classe:\n {class_statistics}\n")
+        
         print("\nIdentificazione degli utenti più retweettati...")
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Utenti trovati: {most_retweeted}")
@@ -74,18 +78,16 @@ def main(mode):
         for level in diffusion:
             print(f"Tree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}, Users at level: {level['users_at_level']}\n")  #paths_at_level: {level["paths_at_level"]}
      
-        #most_retweeted_tweet = '525060425184858112'  #
-        #To-do: analizzare le dimensioni frattali in base alla classe dei tweet, provati:731166399389962242+U,681824512120324096+NR,525060425184858112-T,614467824313106432+T,553589051044151296-T,658462819667615744+F,667534186450825216+F,637868242560638980+Fmrt,612841482823729152+F,498430783699554305-T,626739062792032256+F
         print(f"\nCalcolo della dimensione frattale")
         calculate_fractal_dimension(driver, max_box_size= 10)       
-        
-        """print("\nIdentifying Möbius structures in the social graph...")
+         
+        print("\nIdentifying Möbius structures in the social graph...")
         moebius = MoebiusAnalyzer(driver)
         try:
             moebius.show_and_visualize_structures(limit=5)
         finally:
-            moebius.close()"""
-            
+            moebius.close()
+             
         # Calcolo del PageRank
         print("\nCalcolo del PageRank...")
         create_gds_graph(driver)
@@ -100,7 +102,7 @@ def main(mode):
         print("Creatori di fake news più influenti:")
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
-
+           
     # Chiusura della connessione a Neo4j
     print("Chiusura della connessione a Neo4j...")
     driver.close()

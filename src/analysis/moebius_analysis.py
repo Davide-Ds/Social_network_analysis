@@ -44,7 +44,7 @@ class MoebiusAnalyzer:
         moebius_structures: List[Dict[str, Any]], 
         index: int = 0, 
         neo4j_browser_url: str = "http://localhost:7474/browser/"
-    ) -> str:
+):
         if index < 0 or index >= len(moebius_structures):
             raise IndexError("Invalid index for Möbius structure list.")
 

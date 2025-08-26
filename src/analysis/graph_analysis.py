@@ -1,4 +1,6 @@
 import logging
+import pandas as pd
+logging.getLogger("neo4j").setLevel(logging.CRITICAL)
 
 
 def basic_statistics(driver):
@@ -210,3 +212,27 @@ def get_top_fake_news_creators(driver, top_n=10):
         except Exception as e:
             logging.error(f"Errore durante l'esecuzione della query: {e}")
             return []
+
+def get_class_stats(driver):
+    """Restituisce statistiche aggregate per classe di tweet (solo tweet con label non nulla)."""
+    query = """
+    MATCH (t:Tweet)
+    WHERE t.tweet_label IS NOT NULL
+    OPTIONAL MATCH (u:User)-[r:RETWEET]->(t)
+    WITH t.tweet_label AS class, t, count(u) AS retweet_count, coalesce(max(r.delay), 0) AS max_delay
+    RETURN 
+        class,
+        count(DISTINCT t) AS num_tweets,
+        sum(retweet_count) AS total_retweets,
+        round(toFloat(sum(retweet_count)) / count(DISTINCT t), 2) AS avg_retweets_per_tweet,
+        round(sum(max_delay)/60, 2) AS total_propagation_hours,
+        round(toFloat(sum(max_delay)) / count(DISTINCT t)/60, 2) AS avg_propagation_hours_per_tweet
+    ORDER BY num_tweets DESC
+    """
+    with driver.session() as session:
+        result = session.run(query)
+        records = [dict(record) for record in result]
+        df = pd.DataFrame(records)
+        return df
+         
+        
