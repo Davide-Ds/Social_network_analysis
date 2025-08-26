@@ -10,7 +10,7 @@ from data_processing.import_data import (
 from analysis.graph_analysis import *
 import os
 from logs.log_writer import setup_logging
-from analysis.fractal_analysis import calculate_fractal_dimension_from_neo4j
+from analysis.fractal_analysis import calculate_fractal_dimension
 from analysis.moebius_analysis import MoebiusAnalyzer
 from classification.tweet_classifier import train_and_evaluate  # ML classification function
 
@@ -76,10 +76,13 @@ def main(mode):
         # Basic graph analysis
         print("\n Retrieving basic statistics...")
         stats = basic_statistics(driver)
-        print(f"Basic statistics: {stats}")
+        print(f"Statistiche di base: {stats}")
 
-        # Identify most retweeted users
-        print("\nIdentifying most retweeted users...")
+        print("\nRecupero statistiche sulle classi...")
+        class_statistics = get_class_stats(driver)
+        print(f"Statistiche per classe:\n {class_statistics}\n")
+        
+        print("\nIdentificazione degli utenti più retweettati...")
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Users found: {most_retweeted}")
 

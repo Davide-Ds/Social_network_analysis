@@ -1,81 +1,86 @@
-"""
-## 3. Calcolo della Dimensione Frattale della Rete
-**Obiettivo:**  
-Misurare la dimensione frattale (ad es. con il metodo del box-counting) per valutare l’autosimilarità dell’albero dei retweet.
-
-**Task:**
-- Esportare la struttura del grafo e implementare un algoritmo di box-counting per calcolare la dimensione di Hausdorff o una stima della dimensione frattale.
-- Confrontare il valore ottenuto con quello del triangolo di Sierpinski (~1.585) e analizzare le differenze.
-
-**Metriche:**
-- Valore della dimensione frattale.
-- Variazioni in funzione di differenti tweet o cluster.
-"""
 import numpy as np
-import networkx as nx
-import networkx as nx
+import random
 
-def calculate_fractal_dimension_from_neo4j(driver, tweet_id: str, min_box_size: int = 1, max_box_size: int = 5) -> float:
+def calculate_fractal_dimension(driver, max_box_size: int = 5, sample_size: int = 0):
     """
-    Calcola una stima della dimensione frattale della struttura di retweet di un tweet
-    usando solo query Cypher su Neo4j (senza NetworkX).
-
+    Calcola la dimensione frattale del grafo:
     Args:
         driver: connessione Neo4j.
-        tweet_id (str): ID del tweet sorgente.
-        min_box_size (int): distanza minima.
-        max_box_size (int): distanza massima.
+        max_box_size (int): distanza massima per il box-counting.
+        sample_size (int): numero di tweet casuali da campionare, se 0 calcola su tutta la rete.
 
     Returns:
-        float: stima della dimensione frattale.
+        dict: se sample_size > 0, restituisce un dizionario con tweet_id come chiave e dimensione frattale come valore;
+        float: se sample_size = 0, stima della dimensione frattale dell'intera rete.
     """
-    import numpy as np
 
-    box_sizes = range(min_box_size, max_box_size + 1)
-    box_counts = []
+    def fit_fractal_dimension(box_sizes, box_counts):
+        """Helper per stimare la dimensione frattale da box-count e box-size."""
+        if len(box_counts) < 2:
+            return 0.0
+        logs_eps = np.log(1 / np.array(box_sizes, dtype=float))
+        logs_counts = np.log(np.array(box_counts, dtype=float))
+        coeffs = np.polyfit(logs_eps, logs_counts, 1)
+        return coeffs[0]
 
-    with driver.session() as session:
-        for box_size in box_sizes:
-            query = f"""
-            MATCH (start {{tweet_id: $tweet_id}})
-            MATCH (start)<-[*1..{box_size}]-(n)
-            RETURN count(DISTINCT n) AS box_count
-            """
-            result = session.run(query, tweet_id=tweet_id)
-            single = result.single()
-            if single is None or single["box_count"] is None:
-                print(f"Warning: Nessun risultato per box_size={box_size}.")
-                box_count = 0
-            else:
-                box_count = single["box_count"]
-            box_counts.append(box_count)
+    # Caso 1: campionamento
+    if sample_size > 0:
+        print(f"Calcolo su un campione di {sample_size} tweet sorgenti...\n")
 
-    print(f"Box counts: {box_counts}")
-    print(f"Box sizes: {list(box_sizes)}")
+        with driver.session() as session:
+            tweet_ids = [
+                record["tweet_id"]
+                for record in session.run("MATCH (t:Tweet) WHERE t.text IS NOT NULL RETURN t.tweet_id AS tweet_id")
+            ]
 
-    # Controllo validità dei dati
-    if len(box_counts) == 0:
-        print("Warning: Nessun dato disponibile per il calcolo della dimensione frattale.")
-        return 0.0
-    if len(set(box_counts)) == 1 or min(box_counts) == 0:
-        print("Box-counting non significativo: tutti i box_counts sono uguali o nulli.")
-        return 0.0
+        if len(tweet_ids) == 0:
+            print("Nessun tweet sergente (cioè con attributo 'text') trovato.")
+            return 0.0
 
-    # Calcolo dei logaritmi, filtrando eventuali zeri
-    valid_indices = [i for i, count in enumerate(box_counts) if count > 0]
-    if len(valid_indices) < 2:
-        print("Warning: Dati insufficienti per il fit logaritmico.")
-        return 0.0
+        sampled_ids = random.sample(tweet_ids, min(sample_size, len(tweet_ids)))
+        results = {}
 
-    logs_eps = np.log(1 / np.array([box_sizes[i] for i in valid_indices], dtype=float))
-    logs_counts = np.log(np.array([box_counts[i] for i in valid_indices], dtype=float))
+        with driver.session() as session:
+            for tid in sampled_ids:
+                box_sizes, box_counts = [], []
+                print(f"Tweet {tid}:")
+                for box_size in range(1, max_box_size + 1):
+                    query = f"""
+                    MATCH (start:Tweet {{tweet_id: $tid}})
+                    MATCH (start)<-[*{box_size}]-(m:User)
+                    RETURN count(DISTINCT m) AS covered
+                    """
+                    result = session.run(query, tid=tid).single()
+                    covered_total = result["covered"]
+                    if covered_total == 0:
+                        print(f"Box count 0 per box size {box_size}. Stop a {box_size-1}")
+                        break
+                    box_sizes.append(box_size)
+                    box_counts.append(covered_total)
 
-    if np.any(np.isnan(logs_eps)) or np.any(np.isnan(logs_counts)) or np.any(np.isinf(logs_eps)) or np.any(np.isinf(logs_counts)):
-        print("Warning: Valori non validi nei logaritmi, impossibile stimare la dimensione frattale.")
-        return 0.0
+                print(f"Box size {box_sizes}\nBox count: {box_counts}")
+                d = fit_fractal_dimension(box_sizes, box_counts)
+                results[tid] = d
+                print(f"Dimensione frattale = {d:.4f}\n")
 
-    coeffs = np.polyfit(logs_eps, logs_counts, 1)
-    fractal_dimension = coeffs[0]
-    if fractal_dimension < 0:
-        print("Attenzione: dimensione frattale negativa, stima non significativa.")
-    return float(fractal_dimension) if fractal_dimension is not None else 0.0
+    # Caso 2: intero grafo
+    else:
+        print("Calcolo sulla rete intera...\n")
+        box_sizes, box_counts = [], []
+
+        with driver.session() as session:
+            for box_size in range(1, max_box_size + 1):
+                query = f"""
+                MATCH (n:Tweet)<-[*{box_size}]-(m:User)
+                RETURN count(DISTINCT m) AS covered
+                """
+                result = session.run(query).single()
+                covered_total = result["covered"]
+                if covered_total == 0:
+                    break
+                box_sizes.append(box_size)
+                box_counts.append(covered_total)
+
+        d = fit_fractal_dimension(box_sizes, box_counts)
+        print(f"Box size {box_sizes}\nBox count: {box_counts}")
+        print(f"Dimensione frattale stimata sull'intera rete: {d:.4f}\n")
