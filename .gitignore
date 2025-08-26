@@ -173,3 +173,8 @@ data/twitter15
 
 # Logs
 src/logs
+artifacts/classification_report.txt
+artifacts/confusion_matrix.json
+artifacts/model_logreg.joblib
+.gitignore
+artifacts/tfidf_vectorizer.joblib
