@@ -99,12 +99,9 @@ def main(mode):
         for level in diffusion:
             print(f"Tree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}, Users at level: {level['users_at_level']}\n")
 
-        # Calculate fractal dimension of the most retweeted tweet's tree
-        print("\nCalculating fractal dimension for the most retweeted tweet's structure...")
-        fractal_dimension = calculate_fractal_dimension_from_neo4j(driver, most_retweeted_tweet)
-        print(f"\nEstimated fractal dimension for tweet {most_retweeted_tweet}: {fractal_dimension:.4f}")
-        if fractal_dimension < 0:
-            print("Warning: negative fractal dimension, estimate not meaningful.")
+        # Calculate fractal dimension of the whole network, set the parameter sample_size > 0 too use a sample of random tweets instead
+        print(f"\nCalculating fractal dimension")
+        calculate_fractal_dimension(driver, max_box_size= 5) 
 
         # Detect Möbius structures
         print("\nIdentifying Möbius structures in the social graph...")

@@ -129,7 +129,8 @@ def train_and_evaluate(path_source_tweets: str, path_labels: str, artifacts_dir:
     joblib.dump(vectorizer, os.path.join(artifacts_dir, "tfidf_vectorizer.joblib"))
 
     with open(os.path.join(artifacts_dir, "classification_report.txt"), "w", encoding="utf-8") as f:
-        f.write(classification_report(y_test, y_pred, target_names=["real", "fake"]))
+        report_str = classification_report(y_test, y_pred, target_names=["real", "fake"])
+        f.write(str(report_str))
 
     with open(os.path.join(artifacts_dir, "confusion_matrix.json"), "w", encoding="utf-8") as f:
         json.dump(
