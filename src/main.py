@@ -8,6 +8,7 @@ from data_processing.import_data import (
     import_retweets,
 )
 from analysis.graph_analysis import *
+from clustering.community_detection import *  # Import the missing function
 import os
 from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension
@@ -134,6 +135,18 @@ def main(mode):
         train_and_evaluate(path_source_tweets, path_labels)
     
     # ----------------------------
+    # MODE 5: ML community detection
+    # ----------------------------
+    if mode == 5:
+        print("\nRunning community detection using Leiden algorithm...")
+        df_users = leiden_user_communities(driver)
+        print(df_users.head())   # Print first few rows of the DataFrame
+        print("Number if communities:", df_users['communityId'].nunique())
+        # Write the DataFrame to a CSV file
+        export_cluster_size_distribution(df_users)
+        export_users_ordered_by_cluster(df_users)
+
+    # ----------------------------
     # Close Neo4j connection
     # ----------------------------
     print("Closing Neo4j connection...")
@@ -150,13 +163,13 @@ if __name__ == '__main__':
         3: Both load and analyze
         4: ML text classification
     """
-    print("Modes: 1 = Load data, 2 = Analysis, 3 = Both, 4 = ML classification, 0 = Exit")
+    print("Modes: 1 = Load data, 2 = Analysis, 3 = Both, 4 = ML classification, 5 = Clustering, 0 = Exit")
     while True:
-        mode = input("Enter mode (1, 2, 3, 4 or 0 to exit): ").strip()
+        mode = input("Enter mode (1, 2, 3, 4, 5 or 0 to exit): ").strip()
         if mode == "0":
             print("Exiting program.")
             sys.exit(0)
-        if mode in {"1", "2", "3", "4"}:
+        if mode in {"1", "2", "3", "4", "5"}:
             main(int(mode))
             break
         else:
