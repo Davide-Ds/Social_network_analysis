@@ -1,0 +1,6 @@
+community_id,num_users,top_users,dominant_label,label_distribution,keywords
+18187,24415,"1367531 (5114), 14669951 (2647), 26487169 (1265)",unverified,"false: 25.8%, non-rumor: 20.3%, unverified: 44.6%, true: 9.3%","['shooting', 'mass', 'clinton', 'obama', 'muslim', 'democrat', 'orlando', 'target', 'shooter']"
+5520,12492,"2557521 (12713), 165586474 (5), 249433344 (5)",non-rumor,"non-rumor: 98.8%, true: 0.3%, false: 0.5%, unverified: 0.4%","['let', 'win', 'gold', 'medal', 'pound', 'light', 'history', 'knockout', 'johnson']"
+12416,10769,"5402612 (12028), 612473 (283), 119534385 (31)",non-rumor,"non-rumor: 76.3%, false: 1.1%, true: 21.5%, unverified: 1.1%","['knife', 'confirm', 'uk', 'police', 'people', 'iranian', 'pay', 'french', 'flight']"
+14547,8950,"30313925 (9354), 15115280 (138), 97474887 (135)",non-rumor,"false: 3.9%, non-rumor: 84.7%, true: 5.2%, unverified: 6.2%","['year', 'happy', 'nationalhugday', 'today', 'olympic', 'compete', 'ago', 'woman', 'job']"
+16213,8017,"216776631 (3006), 755113 (1727), 7900962 (968)",unverified,"false: 9.2%, unverified: 81.7%, true: 2.4%, non-rumor: 6.8%","['win', 'nevada', 'actually', 'official', 'today', 'come', 'organization', 'factor', 'enthusiasm']"

@@ -141,10 +141,16 @@ def main(mode):
         print("\nRunning community detection using Leiden algorithm...")
         df_users = leiden_user_communities(driver)
         print(df_users.head())   # Print first few rows of the DataFrame
-        print("Number if communities:", df_users['communityId'].nunique())
+        print("Number of communities:", df_users['communityId'].nunique())
+
         # Write the DataFrame to a CSV file
-        export_cluster_size_distribution(df_users)
-        export_users_ordered_by_cluster(df_users)
+        export_cluster_size_distribution(df_users, os.path.join("src","clustering","community_size_distribution.csv"))
+        export_users_ordered_by_cluster(df_users, os.path.join("src","clustering","users_by_cluster.csv"))
+
+        # Analyze and print details about the top communities
+        df_anlysis= analyze_communities(driver, df_users, max_communities=5, output_csv_path= os.path.join("src","clustering","top_communities_analysis.csv"))
+        print(df_anlysis.head())
+
 
     # ----------------------------
     # Close Neo4j connection
