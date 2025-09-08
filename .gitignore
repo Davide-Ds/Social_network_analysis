@@ -178,3 +178,6 @@ artifacts/confusion_matrix.json
 artifacts/model_logreg.joblib
 .gitignore
 artifacts/tfidf_vectorizer.joblib
+src/clustering/community_size_distribution.csv
+src/clustering/top_communities_analysis.csv
+src/clustering/users_by_cluster.csv
