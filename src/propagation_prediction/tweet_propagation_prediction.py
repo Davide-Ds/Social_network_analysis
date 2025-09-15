@@ -12,28 +12,29 @@ import numpy as np
 # =========================================
 # 3. Create user graph for embeddings
 # =========================================
-def create_user_graph(driver, graph_name="userGraph"):
+def user_graph(driver, drop = False, graph_name="userGraph"):
     with driver.session() as session:
-        # Drop the graph if it already exists
-        try:
-            session.run(f"CALL gds.graph.drop('userGraph') YIELD graphName;")
-            print(f"Graph '{graph_name}' dropped.")
-        except Exception:
-            print(f"No graph '{graph_name}' to drop.")
-
-        # Create the new projected graph with users and RETWEETED_FROM relationships
-        project_query = f"""
-        CALL gds.graph.project(
-          '{graph_name}',
-          'User',
-          {{
-            RETWEETED_FROM: {{orientation: 'UNDIRECTED'}}
-          }}
-        )
-        YIELD graphName, nodeCount, relationshipCount
-        """
-        result = session.run(project_query).data()[0]
-        print(f"Graph '{result['graphName']}' created with {result['nodeCount']} nodes and {result['relationshipCount']} relationships.")
+        if drop:
+            # Drop the graph if it already exists
+            try:
+                session.run(f"CALL gds.graph.drop('userGraph') YIELD graphName;")
+                print(f"Graph '{graph_name}' dropped.")
+            except Exception:
+                print(f"No graph '{graph_name}' to drop.")
+        else:
+            # Create the new projected graph with users and RETWEETED_FROM relationships
+            project_query = f"""
+            CALL gds.graph.project(
+            '{graph_name}',
+            'User',
+            {{
+                RETWEETED_FROM: {{orientation: 'NATURAL'}}
+            }}
+            )
+            YIELD graphName, nodeCount, relationshipCount
+            """
+            result = session.run(project_query).data()[0]
+            print(f"Graph '{result['graphName']}' created with {result['nodeCount']} nodes and {result['relationshipCount']} relationships.")
 
 
 # =========================================
@@ -243,7 +244,7 @@ def predict_global_propagation(model, user_embeddings, tweet_text, vectorizer, s
 def tweet_propagation_prediction_NN(driver, tweet_text, limit=10000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10):
 
     # graph + embeddings
-    create_user_graph(driver)
+    user_graph(driver)
     user_embeddings = generate_user_embeddings(driver, embedding_dim=embedding_dim)
     print(f"Generated user embeddings: {len(user_embeddings)} users")
 
@@ -265,7 +266,9 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=10000, embedding_d
     print("\n=== Global prediction ===")
     print(f"Expected number of retweets: {res['total_expected_retweets']:.1f}")
     print(f"Predicted average delay: {res['avg_delay']:.2f} seconds")
+    print("Top users likely to retweet:")
     for u, p, d in res["top_users"]:
         print(f" - User {u}: prob={p:.2f}, delay={d:.1f}s")
-
+    
+    user_graph(driver, drop=True)
     driver.close()
