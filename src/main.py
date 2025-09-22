@@ -1,5 +1,6 @@
 import sys  
 from data_processing.empty_db import Neo4jCleaner
+from analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
 from utils.neo4j_utils import create_indexes, get_neo4j_driver
 from data_processing.import_data import (
     load_tweets_and_labels,
@@ -127,6 +128,73 @@ def main(mode):
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
 
+        """
+        Link Prediction Example using GraphSAGE Embeddings.
+
+        This script demonstrates how to:
+        1. Generate embeddings for User and Tweet nodes in Neo4j using GraphSAGE.
+        2. Build a dataset of positive and negative User->Tweet pairs.
+        3. Train a Random Forest classifier to predict RETWEET links.
+        4. Evaluate the model using F1-score.
+
+        Requirements:
+        - neo4j
+        - numpy
+        - scikit-learn
+        """
+
+        # ---------------------------
+        # Step 1: Generate embeddings
+        # ---------------------------
+        # Generate embeddings for User nodes
+        user_embeddings = generate_graphsage_embeddings(
+            driver,       # Neo4j driver instance
+            graph_name="myGraph",
+            model_name="UserSAGE",
+            dim=128,
+            node_label="User"
+        )
+
+        # Generate embeddings for Tweet nodes
+        tweet_embeddings = generate_graphsage_embeddings(
+            driver,
+            graph_name="myGraph",
+            model_name="TweetSAGE",
+            dim=128,
+            node_label="Tweet"
+        )
+
+        # ---------------------------
+        # Step 2: Build link prediction dataset
+        # ---------------------------
+        # Positive pairs: existing RETWEET relationships
+        # Negative pairs: random User-Tweet pairs with no RETWEET
+        X, y = build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings)
+
+        # ---------------------------
+        # Step 3: Train-test split
+        # ---------------------------
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
+        # ---------------------------
+        # Step 4: Train classifier
+        # ---------------------------
+        from sklearn.ensemble import RandomForestClassifier
+        clf = RandomForestClassifier(n_estimators=100, random_state=42)
+        clf.fit(X_train, y_train)
+
+        # ---------------------------
+        # Step 5: Predict and evaluate
+        # ---------------------------
+        y_pred = clf.predict(X_test)
+
+        from sklearn.metrics import f1_score
+        print("F1-score:", f1_score(y_test, y_pred))
+
+        
     # ----------------------------
     # MODE 4: ML text classification
     # ----------------------------
