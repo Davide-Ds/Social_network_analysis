@@ -10,6 +10,7 @@ from data_processing.import_data import (
 )
 from analysis.graph_analysis import *
 from clustering.community_detection import *  # Import the missing function
+from propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
 import os
 from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension
@@ -41,9 +42,9 @@ def main(mode):
     driver = get_neo4j_driver()
 
     # ----------------------------
-    # MODE 1 OR 3: Load data
+    # MODE 1: Load data
     # ----------------------------
-    if mode in [1, 3]:
+    if mode == 1:
         # Clear Neo4j database if full
         cleaner = Neo4jCleaner(driver)
         try:
@@ -72,9 +73,9 @@ def main(mode):
         print("Data import completed.")
 
     # ----------------------------
-    # MODE 2 OR 3: Analyze graph
+    # MODE 2: Analyze graph
     # ----------------------------
-    if mode in [2, 3]:
+    if mode == 2:
         # Basic graph analysis
         print("\n Retrieving basic statistics...")
         stats = basic_statistics(driver)
@@ -196,16 +197,16 @@ def main(mode):
 
         
     # ----------------------------
-    # MODE 4: ML text classification
+    # MODE 3: ML text classification
     # ----------------------------
-    if mode == 4:
+    if mode == 3:
         print("\nRunning ML text classification on tweets...")
         train_and_evaluate(path_source_tweets, path_labels)
     
     # ----------------------------
-    # MODE 5: ML community detection
+    # MODE 4: ML community detection
     # ----------------------------
-    if mode == 5:
+    if mode == 4:
         print("\nRunning community detection using Leiden algorithm...")
         df_users = leiden_user_communities(driver)
         print(df_users.head())   # Print first few rows of the DataFrame
@@ -218,6 +219,14 @@ def main(mode):
         # Analyze and print details about the top communities
         df_anlysis= analyze_communities(driver, df_users, max_communities=5, output_csv_path= os.path.join("src","clustering","top_communities_analysis.csv"))
         print(df_anlysis.head())
+    
+    # ----------------------------
+    # MODE 5: Tweet propagation prediction with Neural Networks
+    # ----------------------------
+    if mode == 5:
+        print("\nRunning tweet propagation prediction with Neural Networks...")
+        tweet = "Elon musk went to Mars on his tesla cybertruck"
+        tweet_propagation_prediction_NN(driver, tweet)
 
 
     # ----------------------------
@@ -237,7 +246,7 @@ if __name__ == '__main__':
         3: Both load and analyze
         4: ML text classification
     """
-    print("Modes: 1 = Load data, 2 = Analysis, 3 = Both, 4 = ML classification, 5 = Clustering, 0 = Exit")
+    print("Modes: 1 = Load data, 2 = Analysis, 3 = ML classification, 4 = Clustering, 5 = Tweet propagation prediction, 0 = Exit")
     while True:
         mode = input("Enter mode (1, 2, 3, 4, 5 or 0 to exit): ").strip()
         if mode == "0":

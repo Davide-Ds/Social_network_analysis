@@ -4,7 +4,7 @@ import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-def leiden_user_communities(driver, graph_name="usersGraph"):
+def leiden_user_communities(driver, graph_name="userGraph"):
     with driver.session() as session:
         # Remove any existing graph with the same name
         session.run(f"CALL gds.graph.drop('{graph_name}', false)")  
