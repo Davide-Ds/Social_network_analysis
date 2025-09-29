@@ -152,7 +152,7 @@ def main(mode):
         # Step 1: Generate embeddings
         # ---------------------------
         # Generate embeddings for User nodes
-        print("\nGenerating GraphSAGE embeddings for Users and Tweets...")
+        print("\nGenerating GraphSAGE embeddings for Users...")
         user_embeddings = generate_graphsage_embeddings(
             driver,       # Neo4j driver instance
             graph_name="fullGraph",

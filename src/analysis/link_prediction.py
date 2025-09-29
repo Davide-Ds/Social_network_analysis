@@ -98,17 +98,14 @@ def build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings, neg
         positive_pairs = [(record["user_id"], record["tweet_id"]) for record in pos_result]
 
     # Step 2: Generate negative pairs
+    positive_set = set(positive_pairs)
     all_users = list(user_embeddings.keys())
     all_tweets = list(tweet_embeddings.keys())
     num_negatives = int(len(positive_pairs) * negative_ratio)
-    negative_pairs = set()
-
-    while len(negative_pairs) < num_negatives:
-        u = random.choice(all_users)
-        t = random.choice(all_tweets)
-        if (u, t) not in positive_pairs:
-            negative_pairs.add((u, t))
-    negative_pairs = list(negative_pairs)
+    all_possible_pairs = set((u, t) for u in all_users for t in all_tweets)
+    candidate_negatives = list(all_possible_pairs - positive_set)
+    np.random.shuffle(candidate_negatives)
+    negative_pairs = candidate_negatives[:num_negatives]
 
     # Step 3: Build feature vectors and labels
     X = []
