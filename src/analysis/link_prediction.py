@@ -6,6 +6,20 @@ import random
 def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim: int = 128, node_label: str = "User"):
     """
     Generate GraphSAGE embeddings for nodes of a given type in the Neo4j graph.
+
+    Args:
+        driver (neo4j.Driver): Neo4j driver instance.
+        graph_name (str): Name of the in-memory GDS graph.
+        model_name (str): Name for the embedding model.
+        dim (int): Embedding dimension.
+        node_label (str): Label of nodes to embed ("User" or "Tweet").
+
+    Returns:
+        dict: Dictionary mapping node IDs to embedding vectors (numpy arrays).
+
+    Example:
+        embeddings = generate_graphsage_embeddings(driver, "myGraph", "UserSAGE", 128, node_label="User")
+        user_emb = embeddings[user_id]
     """
     # Scegli la property giusta in base al tipo di nodo
     if node_label == "User":
