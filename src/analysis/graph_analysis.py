@@ -112,12 +112,12 @@ def get_most_retweeted_tweet(driver):
         return record["tweet_id"] if record else None
 
 
-def create_gds_graph(driver):
+def create_User_gds_graph(driver):
     """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già. Natural orientation usa la direzione nel db, meglio per il page rank"""
     query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
     CALL gds.graph.project(
-        'myGraph',
+        'userGraph',
         {
             User: {
                 label: 'User'
@@ -154,18 +154,62 @@ def create_gds_graph(driver):
             # Creiamo il grafo GDS solo se non esiste
             session.run(query_create)
 
-
+def create_complete_gds_graph(driver):    
+    """
+    Crea un grafo GDS 'fullGraph' con:
+      - nodi User (property: pagerank)
+      - nodi Tweet (property: text_embedding)
+      - relazioni: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
+    """
+    query_drop = "CALL gds.graph.drop('fullGraph', false) YIELD graphName"
+    query_create = """
+    CALL gds.graph.project(
+        'fullGraph',
+        {
+            User: {
+                properties: ['pagerank']
+            },
+            Tweet: {
+                properties: ['text_embedding']
+            }
+        },
+        {
+            CREATES: {type: 'CREATES', orientation: 'NATURAL'},
+            RETWEET: {type: 'RETWEET', orientation: 'NATURAL'},
+            RETWEETED_FROM: {type: 'RETWEETED_FROM', orientation: 'NATURAL'},
+            QUOTE: {type: 'QUOTE', orientation: 'NATURAL'},
+            INTERACTION: {type: 'INTERACTION', orientation: 'NATURAL'}
+        }
+    )
+    """
+    with driver.session() as session:
+        try:
+            session.run(query_drop)
+        except Exception:
+            pass
+        session.run(query_create)
+    print("GDS graph 'fullGraph' creato con User (pagerank) e Tweet (text_embedding).")   
+    
 def compute_pagerank(driver, top_n=10):
-    """Calcola il PageRank degli utenti per trovare i più influenti nel grafo."""
-    query = """
-    CALL gds.pageRank.stream('myGraph')
-    YIELD nodeId, score
-    RETURN gds.util.asNode(nodeId).user_id AS user, score
+    """
+    Calcola il PageRank degli utenti, lo salva come proprietà 'pagerank' nei nodi User,
+    e restituisce i top_n utenti più influenti.
+    """
+    # Calcola e scrive il PageRank nei nodi User come property 'pagerank'
+    write_query = """
+    CALL gds.pageRank.write('userGraph', { writeProperty: 'pagerank' })
+    YIELD nodePropertiesWritten, ranIterations
+    """
+    # Recupera i top_n utenti per PageRank
+    select_query = """
+    MATCH (u:User)
+    RETURN u.user_id AS user, u.pagerank AS score
     ORDER BY score DESC
     LIMIT $top_n
     """
     with driver.session() as session:
-        result = session.run(query, {"top_n": top_n})
+        session.run(write_query)
+        result = session.run(select_query, {"top_n": top_n})
         return [{"user": record["user"], "score": record["score"]} for record in result]
 
 

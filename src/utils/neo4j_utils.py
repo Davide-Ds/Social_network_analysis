@@ -25,3 +25,35 @@ def serialize_path(path):
             "end_node_id": rel.end_node.id
         } for rel in path.relationships]
 }
+    
+def compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding'):
+    """
+    Calcola l'embedding della proprietà 'text' per ogni nodo Tweet e lo salva come property 'text_embedding' nel nodo stesso.
+    Args:
+        driver: Neo4j driver
+        model_name: nome del modello SentenceTransformer da usare
+        text_property: nome della property testuale da embeddare
+        embedding_property: nome della property dove salvare l'embedding
+    """
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(model_name)
+    tweet_features = []
+
+    # Estrai i testi dei tweet
+    with driver.session() as session:
+        tweets = session.run(f"MATCH (t:Tweet) RETURN t.tweet_id AS id, t.{text_property} AS text")
+        for record in tweets:
+            tweet_id = record["id"]
+            text = record["text"] or ""
+            emb = model.encode(text).tolist()
+            tweet_features.append({"tweet_id": tweet_id, "embedding": emb})
+
+    # Salva l'embedding nei nodi Tweet
+    with driver.session() as session:
+        for feat in tweet_features:
+            session.run(
+                f"MATCH (t:Tweet {{tweet_id: $id}}) SET t.{embedding_property} = $embedding",
+                id=feat["tweet_id"], embedding=feat["embedding"]
+            )
+    print(f"Salvati gli embedding '{embedding_property}' per tutti i Tweet.")    
