@@ -6,28 +6,24 @@ import random
 def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim: int = 128, node_label: str = "User"):
     """
     Generate GraphSAGE embeddings for nodes of a given type in the Neo4j graph.
-
-    Args:
-        driver (neo4j.Driver): Neo4j driver instance.
-        graph_name (str): Name of the in-memory GDS graph.
-        model_name (str): Name for the embedding model.
-        dim (int): Embedding dimension.
-        node_label (str): Label of nodes to embed ("User" or "Tweet").
-
-    Returns:
-        dict: Dictionary mapping node IDs to embedding vectors (numpy arrays).
-
-    Example:
-        embeddings = generate_graphsage_embeddings(driver, "myGraph", "UserSAGE", 128, node_label="User")
-        user_emb = embeddings[user_id]
     """
+    # Scegli la property giusta in base al tipo di nodo
+    if node_label == "User":
+        feature_properties = ["pagerank"]
+    elif node_label == "Tweet":
+        feature_properties = ["text_embedding"]
+    else:
+        raise ValueError("node_label deve essere 'User' o 'Tweet'")
+
     with driver.session() as session:
         # Step 1: Train GraphSAGE model
         train_query = f"""
         CALL gds.beta.graphSage.train('{graph_name}',
             {{
+                modelName: '{model_name}',
                 nodeLabels: ['{node_label}'],
                 relationshipTypes: ['RETWEET','QUOTE','INTERACTION','CREATES','RETWEETED_FROM'],
+                featureProperties: {feature_properties},
                 embeddingDimension: $dim,
                 randomSeed: 42
             }}
@@ -50,11 +46,13 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
         result = session.run(embed_query)
 
         # Step 3: Convert embeddings to numpy arrays
+        import numpy as np
         embeddings = {}
         for record in result:
             node_id = record["node_id"]
-            emb_vector = np.array(record["embedding"], dtype=np.float32)
-            embeddings[node_id] = emb_vector
+            if node_id is not None:
+                emb_vector = np.array(record["embedding"], dtype=np.float32)
+                embeddings[node_id] = emb_vector
 
         return embeddings
 
