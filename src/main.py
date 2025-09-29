@@ -1,7 +1,7 @@
 import sys  
 from data_processing.empty_db import Neo4jCleaner
 from analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
-from utils.neo4j_utils import create_indexes, get_neo4j_driver
+from utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
 from data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
@@ -116,12 +116,11 @@ def main(mode):
 
         # Compute PageRank
         print("\nComputing PageRank...")
-        create_gds_graph(driver)
+        create_User_gds_graph(driver)
         top_users = compute_pagerank(driver, 10)
         print("Top influential users (PageRank):")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
-
         # Analyze top fake news creators
         print("\nAnalyzing top fake news creators...")
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
@@ -129,6 +128,11 @@ def main(mode):
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
 
+        print("Computing embeddings for tweets using all-MiniLM-L6-v2 model...")    
+        compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
+        print("Creating complete GDS graph with User and Tweet nodes...")
+        create_complete_gds_graph(driver)
+        
         """
         Link Prediction Example using GraphSAGE Embeddings.
 
@@ -148,18 +152,20 @@ def main(mode):
         # Step 1: Generate embeddings
         # ---------------------------
         # Generate embeddings for User nodes
+        print("\nGenerating GraphSAGE embeddings for Users and Tweets...")
         user_embeddings = generate_graphsage_embeddings(
             driver,       # Neo4j driver instance
-            graph_name="myGraph",
+            graph_name="fullGraph",
             model_name="UserSAGE",
             dim=128,
             node_label="User"
         )
 
         # Generate embeddings for Tweet nodes
+        print("Generating GraphSAGE embeddings for Tweets...")
         tweet_embeddings = generate_graphsage_embeddings(
             driver,
-            graph_name="myGraph",
+            graph_name="fullGraph",
             model_name="TweetSAGE",
             dim=128,
             node_label="Tweet"
@@ -170,12 +176,14 @@ def main(mode):
         # ---------------------------
         # Positive pairs: existing RETWEET relationships
         # Negative pairs: random User-Tweet pairs with no RETWEET
+        print("Building link prediction dataset...")
         X, y = build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings)
 
         # ---------------------------
         # Step 3: Train-test split
         # ---------------------------
         from sklearn.model_selection import train_test_split
+        print("Splitting dataset into train and test sets...")
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
@@ -184,12 +192,15 @@ def main(mode):
         # Step 4: Train classifier
         # ---------------------------
         from sklearn.ensemble import RandomForestClassifier
+        print("Training Random Forest classifier...")
         clf = RandomForestClassifier(n_estimators=100, random_state=42)
+        print(f"Training samples: {len(y_train)}, Test samples: {len(y_test)}")
         clf.fit(X_train, y_train)
 
         # ---------------------------
         # Step 5: Predict and evaluate
         # ---------------------------
+        print("Evaluating model...")
         y_pred = clf.predict(X_test)
 
         from sklearn.metrics import f1_score
