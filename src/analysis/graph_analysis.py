@@ -197,7 +197,7 @@ def compute_pagerank(driver, top_n=10):
     """
     # Calcola e scrive il PageRank nei nodi User come property 'pagerank'
     write_query = """
-    CALL gds.pageRank.write('myGraph', { writeProperty: 'pagerank' })
+    CALL gds.pageRank.write('userGraph', { writeProperty: 'pagerank' })
     YIELD nodePropertiesWritten, ranIterations
     """
     # Recupera i top_n utenti per PageRank
