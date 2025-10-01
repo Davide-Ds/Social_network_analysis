@@ -16,7 +16,7 @@ from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension
 from analysis.moebius_analysis import MoebiusAnalyzer
 from classification.tweet_classifier import train_and_evaluate  # ML classification function
-
+from sklearn.model_selection import StratifiedKFold, cross_validate
 # Initialize logging (default folder: utils)
 setup_logging()
 
@@ -210,13 +210,13 @@ def main(mode):
         # ---------------------------
         
         from sklearn.metrics import f1_score, accuracy_score
-        
-        # Valutazione su training set
+
+        # Evaluation on training set
         y_train_pred = clf.predict(X_train)
         train_f1 = f1_score(y_train, y_train_pred)
         train_acc = accuracy_score(y_train, y_train_pred)
-        
-        # Valutazione su test set
+
+        # Evaluation on test set
         y_test_pred = clf.predict(X_test)
         test_f1 = f1_score(y_test, y_test_pred)
         test_acc = accuracy_score(y_test, y_test_pred)
@@ -230,7 +230,7 @@ def main(mode):
         import pandas as pd
         from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
 
-        # Calcola le metriche
+        # Compute metrics
         metrics = {
             "F1-score": [f1_score(y_test, y_pred)],
             "Accuracy": [accuracy_score(y_test, y_pred)],
@@ -239,13 +239,30 @@ def main(mode):
         }
 
         df_metrics = pd.DataFrame(metrics)
-        print("\nMetriche di valutazione:\n")
+        print("\nEvaluation Metrics:\n")
         print(df_metrics.to_string(index=False))
 
-        # Matrice di confusione separata
-        print("\nMatrice di confusione:\n")
+        # Confusion Matrix
+        print("\nConfusion Matrix:\n")
         print(confusion_matrix(y_test, y_pred))
 
+        # Cross-validation
+        print("\nPerforming 10-fold cross-validation...")
+        # Use StratifiedKFold to maintain class balance in each fold
+        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+
+        scoring = ['accuracy', 'f1', 'precision', 'recall']
+        results = cross_validate(clf, X, y, cv=cv, scoring=scoring, return_train_score=False)
+
+        # Print scores for each fold and their averages
+        print("\nCross-validation results:")
+        for metric in scoring:
+            scores = results[f'test_{metric}']
+            print(f"{metric.capitalize()} per fold: {scores}")
+            print(f"{metric.capitalize()} medio: {scores.mean():.4f} (+/- {scores.std():.4f})")
+
+
+        
         
     # ----------------------------
     # MODE 3: ML text classification
