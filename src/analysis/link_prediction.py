@@ -31,6 +31,13 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
 
     with driver.session() as session:
         # Step 1: Train GraphSAGE model
+        # Elimina il modello se esiste già
+        drop_query = f"CALL gds.beta.model.drop('{model_name}') YIELD modelName"
+        try:
+            session.run(drop_query)
+        except Exception:
+            pass  # Ignora errori se il modello non esiste
+
         train_query = f"""
         CALL gds.beta.graphSage.train('{graph_name}',
             {{
@@ -94,33 +101,43 @@ def build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings, neg
     RETURN u.user_id AS user_id, t.tweet_id AS tweet_id
     """
     with driver.session() as session:
+        print("Fetching positive RETWEET pairs from Neo4j...")
         pos_result = session.run(pos_query)
         positive_pairs = [(record["user_id"], record["tweet_id"]) for record in pos_result]
+        print(f"Found {len(positive_pairs)} positive RETWEET pairs.")
 
     # Step 2: Generate negative pairs
     positive_set = set(positive_pairs)
+    negative_pairs = set()
+    attempts = 0
+    num_negatives = int(len(positive_pairs) * negative_ratio)
+    max_attempts = num_negatives * 10  # evita loop infinito
+    
+    print("Fetching negative RETWEET pairs...")    
     all_users = list(user_embeddings.keys())
     all_tweets = list(tweet_embeddings.keys())
-    num_negatives = int(len(positive_pairs) * negative_ratio)
-    all_possible_pairs = set((u, t) for u in all_users for t in all_tweets)
-    candidate_negatives = list(all_possible_pairs - positive_set)
-    np.random.shuffle(candidate_negatives)
-    negative_pairs = candidate_negatives[:num_negatives]
-
+    while len(negative_pairs) < num_negatives and attempts < max_attempts:
+        u = random.choice(all_users)
+        t = random.choice(all_tweets)
+        if (u, t) not in positive_set and (u, t) not in negative_pairs:
+            negative_pairs.add((u, t))
+        attempts += 1
+    negative_pairs = list(negative_pairs)
+    print(f"Generated {len(negative_pairs)} negative RETWEET pairs.")
     # Step 3: Build feature vectors and labels
     X = []
     y = []
-
+    print("Building positive RETWEET pairs...")
     for u, t in positive_pairs:
         if u in user_embeddings and t in tweet_embeddings:
             X.append(np.concatenate([user_embeddings[u], tweet_embeddings[t]]))
             y.append(1)
-
+    print("Building negative RETWEET pairs...")
     for u, t in negative_pairs:
         if u in user_embeddings and t in tweet_embeddings:
             X.append(np.concatenate([user_embeddings[u], tweet_embeddings[t]]))
             y.append(0)
-
+    print(f"Final dataset size: {len(y)} samples.")
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.int32)
 

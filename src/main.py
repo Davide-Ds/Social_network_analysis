@@ -121,15 +121,18 @@ def main(mode):
         print("Top influential users (PageRank):")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
+            
         # Analyze top fake news creators
         print("\nAnalyzing top fake news creators...")
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
         print("Top influential fake news creators:")
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
-
-        print("Computing embeddings for tweets using all-MiniLM-L6-v2 model...")    
-        compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
+        
+        # Link Prediction using GraphSAGE embeddings
+        print("Computing embeddings for tweets using all-MiniLM-L6-v2 model if not already present...") 
+        if(not driver.session().run("MATCH (t:Tweet) WHERE exists(t.text_embedding) RETURN t LIMIT 1").single()):
+            compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
         print("Creating complete GDS graph with User and Tweet nodes...")
         create_complete_gds_graph(driver)
         
@@ -153,6 +156,9 @@ def main(mode):
         # ---------------------------
         # Generate embeddings for User nodes
         print("\nGenerating GraphSAGE embeddings for Users...")
+        if (driver.session().run("CALL gds.model.exists('UserSAGE') YIELD exists RETURN exists").single().value()):
+            driver.session().run("CALL gds.model.drop('UserSAGE')"
+        )        
         user_embeddings = generate_graphsage_embeddings(
             driver,       # Neo4j driver instance
             graph_name="fullGraph",
@@ -160,9 +166,11 @@ def main(mode):
             dim=128,
             node_label="User"
         )
-
-        # Generate embeddings for Tweet nodes
-        print("Generating GraphSAGE embeddings for Tweets...")
+            
+        print("\nGenerating GraphSAGE embeddings for Tweets...")
+        if (driver.session().run("CALL gds.model.exists('TweetSAGE') YIELD exists RETURN exists").single().value()):
+            driver.session().run("CALL gds.model.drop('TweetSAGE')"
+            )
         tweet_embeddings = generate_graphsage_embeddings(
             driver,
             graph_name="fullGraph",
@@ -170,7 +178,7 @@ def main(mode):
             dim=128,
             node_label="Tweet"
         )
-
+        
         # ---------------------------
         # Step 2: Build link prediction dataset
         # ---------------------------
@@ -195,6 +203,7 @@ def main(mode):
         print("Training Random Forest classifier...")
         clf = RandomForestClassifier(n_estimators=100, random_state=42)
         print(f"Training samples: {len(y_train)}, Test samples: {len(y_test)}")
+        print("Fitting model...")
         clf.fit(X_train, y_train)
 
         # ---------------------------
