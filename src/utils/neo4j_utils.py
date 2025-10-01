@@ -14,7 +14,7 @@ def create_indexes(driver):
     with driver.session() as session:
         session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")
         session.run("CREATE INDEX IF NOT EXISTS FOR (t:Tweet) ON (t.tweet_id)")
-    logging.info("Indici creati su User(user_id) e Tweet(tweet_id)")   
+    logging.info("Created indexes on User(user_id) and Tweet(tweet_id)")
     
 def serialize_path(path):
     return {
@@ -28,19 +28,19 @@ def serialize_path(path):
     
 def compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding'):
     """
-    Calcola l'embedding della proprietà 'text' per ogni nodo Tweet e lo salva come property 'text_embedding' nel nodo stesso.
+    Compute and save text embeddings for Tweet nodes using a SentenceTransformer model.
     Args:
         driver: Neo4j driver
-        model_name: nome del modello SentenceTransformer da usare
-        text_property: nome della property testuale da embeddare
-        embedding_property: nome della property dove salvare l'embedding
+        model_name: name of the SentenceTransformer model to use
+        text_property: name of the text property to embed
+        embedding_property: name of the property to save the embedding
     """
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_name)
     tweet_features = []
 
-    # Estrai i testi dei tweet
+    # Extract tweet texts
     with driver.session() as session:
         tweets = session.run(f"MATCH (t:Tweet) RETURN t.tweet_id AS id, t.{text_property} AS text")
         for record in tweets:
@@ -49,11 +49,11 @@ def compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', tex
             emb = model.encode(text).tolist()
             tweet_features.append({"tweet_id": tweet_id, "embedding": emb})
 
-    # Salva l'embedding nei nodi Tweet
+    # Save embeddings to Tweet nodes
     with driver.session() as session:
         for feat in tweet_features:
             session.run(
                 f"MATCH (t:Tweet {{tweet_id: $id}}) SET t.{embedding_property} = $embedding",
                 id=feat["tweet_id"], embedding=feat["embedding"]
             )
-    print(f"Salvati gli embedding '{embedding_property}' per tutti i Tweet.")    
+    print(f"Saved embeddings '{embedding_property}' for all Tweets.")

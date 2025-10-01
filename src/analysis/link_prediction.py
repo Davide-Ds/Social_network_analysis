@@ -77,66 +77,118 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
 
         return embeddings
 
-def build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings, negative_ratio=1.0, random_seed=42):
+def build_link_prediction_dataset(
+    driver,
+    user_embeddings,
+    tweet_embeddings,
+    negative_ratio=1.0,
+    random_seed=42
+):
     """
-    Build dataset for link prediction (User -> Tweet) using embeddings only.
+    Builds a dataset for link prediction (User -> Tweet) using node embeddings.
+
+    This function constructs a supervised learning dataset for the link prediction task,
+    where the goal is to predict whether a user will retweet a tweet. It generates
+    positive samples (existing RETWEET relationships) and negative samples (user-tweet
+    pairs without a RETWEET relationship), and creates feature vectors by concatenating
+    the embeddings of the user and the tweet.
+
+    The function queries the Neo4j database to extract all positive pairs, identifies
+    active users and popular tweets for more challenging negative sampling, and ensures
+    reproducibility via a random seed. The resulting dataset can be used to train and
+    evaluate machine learning models for link prediction.
 
     Args:
-        driver (neo4j.Driver): Neo4j driver instance.
-        user_embeddings (dict): {user_id: embedding vector}
-        tweet_embeddings (dict): {tweet_id: embedding vector}
-        negative_ratio (float): ratio of negative samples to positive samples
-        random_seed (int): random seed for reproducibility
+        driver (neo4j.Driver): 
+            An active Neo4j driver instance for database connection.
+        user_embeddings (dict): 
+            Dictionary mapping user_id (str or int) to their embedding vector (np.ndarray).
+        tweet_embeddings (dict): 
+            Dictionary mapping tweet_id (str or int) to their embedding vector (np.ndarray).
+        negative_ratio (float, optional): 
+            Ratio of negative samples to positive samples. 
+            For example, 1.0 means the same number of negatives as positives. Default is 1.0.
+        random_seed (int, optional): 
+            Random seed for reproducibility of negative sampling. Default is 42.
 
     Returns:
-        X (np.ndarray): feature matrix (concatenated embeddings)
-        y (np.ndarray): labels (1=RETWEET exists, 0=no RETWEET)
+        tuple:
+            X (np.ndarray): 
+                Feature matrix of shape (n_samples, embedding_dim * 2), where each row is the
+                concatenation of a user and tweet embedding.
+            y (np.ndarray): 
+                Label vector of shape (n_samples,), where 1 indicates a positive (RETWEET exists)
+                and 0 indicates a negative (no RETWEET).
+
+    Example:
+        >>> X, y = build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings, negative_ratio=1.0)
+
+    Notes:
+        - Positive pairs are all (user, tweet) pairs with a RETWEET relationship in the graph.
+        - Negative pairs are sampled from active users and popular tweets, excluding existing RETWEETs.
+        - The function prints progress and dataset statistics for transparency.
     """
+    
     random.seed(random_seed)
     np.random.seed(random_seed)
 
-    # Step 1: Get positive pairs from Neo4j
+    # Step 1: Query positive pairs (existing RETWEET relationships)
     pos_query = """
     MATCH (u:User)-[:RETWEET]->(t:Tweet)
     RETURN u.user_id AS user_id, t.tweet_id AS tweet_id
     """
     with driver.session() as session:
-        print("Fetching positive RETWEET pairs from Neo4j...")
         pos_result = session.run(pos_query)
         positive_pairs = [(record["user_id"], record["tweet_id"]) for record in pos_result]
-        print(f"Found {len(positive_pairs)} positive RETWEET pairs.")
 
-    # Step 2: Generate negative pairs
+        # Identify active users (users who have retweeted at least once)
+        active_users = [
+            record["user_id"] for record in session.run(
+                "MATCH (u:User)-[:RETWEET]->() RETURN DISTINCT u.user_id AS user_id"
+            )
+        ]
+
+        # Identify popular tweets (tweets that have been retweeted at least once)
+        popular_tweets = [
+            record["tweet_id"] for record in session.run(
+                "MATCH ()-[:RETWEET]->(t:Tweet) RETURN DISTINCT t.tweet_id AS tweet_id"
+            )
+        ]
+
     positive_set = set(positive_pairs)
+    num_negatives = int(len(positive_pairs) * negative_ratio)
     negative_pairs = set()
     attempts = 0
-    num_negatives = int(len(positive_pairs) * negative_ratio)
-    max_attempts = num_negatives * 10  # evita loop infinito
-    
-    print("Fetching negative RETWEET pairs...")    
-    all_users = list(user_embeddings.keys())
-    all_tweets = list(tweet_embeddings.keys())
+    max_attempts = num_negatives * 20  # Prevents infinite loops in dense graphs
+
+    # Step 2: Sample negative pairs (user-tweet pairs with no RETWEET)
+    print("Building negative RETWEET pairs...")
     while len(negative_pairs) < num_negatives and attempts < max_attempts:
-        u = random.choice(all_users)
-        t = random.choice(all_tweets)
+        u = random.choice(active_users)
+        t = random.choice(popular_tweets)
         if (u, t) not in positive_set and (u, t) not in negative_pairs:
             negative_pairs.add((u, t))
         attempts += 1
     negative_pairs = list(negative_pairs)
-    print(f"Generated {len(negative_pairs)} negative RETWEET pairs.")
+
+    print(f"Generated {len(positive_pairs)} positive and {len(negative_pairs)} negative samples.")
+
     # Step 3: Build feature vectors and labels
     X = []
     y = []
+
     print("Building positive RETWEET pairs...")
     for u, t in positive_pairs:
         if u in user_embeddings and t in tweet_embeddings:
             X.append(np.concatenate([user_embeddings[u], tweet_embeddings[t]]))
             y.append(1)
+
     print("Building negative RETWEET pairs...")
     for u, t in negative_pairs:
         if u in user_embeddings and t in tweet_embeddings:
             X.append(np.concatenate([user_embeddings[u], tweet_embeddings[t]]))
             y.append(0)
+
     print(f"Final dataset size: {len(y)} samples.")
     X = np.array(X, dtype=np.float32)
     y = np.array(y, dtype=np.int32)

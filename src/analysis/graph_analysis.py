@@ -148,18 +148,18 @@ def create_User_gds_graph(driver):
     )
     """
     with driver.session() as session:
-        # Verifica se il grafo esiste già
+        # Check if the graph already exists
         exists = session.run(query_check).single()['exists']
         if not exists:
-            # Creiamo il grafo GDS solo se non esiste
+            # Create the GDS graph only if it doesn't exist
             session.run(query_create)
 
 def create_complete_gds_graph(driver):    
     """
-    Crea un grafo GDS 'fullGraph' con:
-      - nodi User (property: pagerank)
-      - nodi Tweet (property: text_embedding)
-      - relazioni: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
+    Creates a complete GDS graph 'fullGraph' with:
+      - User nodes (property: pagerank)
+      - Tweet nodes (property: text_embedding)
+      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
     """
     query_drop = "CALL gds.graph.drop('fullGraph', false) YIELD graphName"
     query_create = """
@@ -188,19 +188,19 @@ def create_complete_gds_graph(driver):
         except Exception:
             pass
         session.run(query_create)
-    print("GDS graph 'fullGraph' creato con User (pagerank) e Tweet (text_embedding).")   
+    print("GDS graph 'fullGraph' created with User (pagerank) and Tweet (text_embedding).")
     
 def compute_pagerank(driver, top_n=10):
     """
-    Calcola il PageRank degli utenti, lo salva come proprietà 'pagerank' nei nodi User,
-    e restituisce i top_n utenti più influenti.
+    Calculates the PageRank of users, saves it as the 'pagerank' property in User nodes,
+    and returns the top_n most influential users.
     """
-    # Calcola e scrive il PageRank nei nodi User come property 'pagerank'
+    # Compute and write the PageRank in User nodes as property 'pagerank'
     write_query = """
     CALL gds.pageRank.write('userGraph', { writeProperty: 'pagerank' })
     YIELD nodePropertiesWritten, ranIterations
     """
-    # Recupera i top_n utenti per PageRank
+    # Retrieve the top_n users by PageRank
     select_query = """
     MATCH (u:User)
     RETURN u.user_id AS user, u.pagerank AS score
@@ -214,7 +214,7 @@ def compute_pagerank(driver, top_n=10):
 
 
 def get_top_fake_news_creators(driver, top_n=10):
-    """Restituisce i principali creatori di fake news con dettagli sui loro tweet e retweet."""
+    """Returns the top fake news creators with details about their tweets and retweets."""
     query = """
     MATCH (u:User)-[:CREATES]->(t:Tweet)
     WITH u, 
@@ -258,7 +258,7 @@ def get_top_fake_news_creators(driver, top_n=10):
             return []
 
 def get_class_stats(driver):
-    """Restituisce statistiche aggregate per classe di tweet (solo tweet con label non nulla)."""
+    """Return aggregate statistics for tweet classes (only tweets with non-null labels)."""
     query = """
     MATCH (t:Tweet)
     WHERE t.tweet_label IS NOT NULL
