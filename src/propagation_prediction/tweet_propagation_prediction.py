@@ -258,7 +258,7 @@ def train_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
 
         train_loss = float(np.mean(train_losses)) if train_losses else 0.0
         val_loss = float(np.mean(val_losses)) if val_losses else 0.0
-        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
+        print(f"[REGRESSOR] Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}")
 
         # early stopping on val_loss
         if val_loss < best_val - 1e-6:
@@ -268,7 +268,7 @@ def train_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= patience:
-                print(f"Early stopping at epoch {epoch+1}")
+                print(f"[REGRESSOR] Early stopping at epoch {epoch+1}")
                 break
 
     # load best model state
@@ -313,7 +313,8 @@ def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patienc
         ys = np.concatenate(ys) if ys else np.array([])
         probs = np.concatenate(probs) if probs else np.array([])
         auc = float(roc_auc_score(ys, probs)) if ys.size and len(np.unique(ys))>1 else None
-        print(f"Epoch {epoch+1}/{epochs} - Train Loss: {np.mean(train_losses):.4f} - Val Loss: {val_loss:.4f} - Val AUC: {auc}")
+        auc_str = f"{auc:.4f}" if auc is not None else "n/a"
+        print(f"[CLASSIFIER] Epoch {epoch+1}/{epochs} - Train Loss: {np.mean(train_losses):.4f} - Val Loss: {val_loss:.4f} - Val AUC: {auc_str}")
         if val_loss < best_val - 1e-6:
             best_val = val_loss
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
@@ -321,7 +322,7 @@ def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patienc
         else:
             no_improve += 1
             if no_improve >= patience:
-                print(f"Early stopping classifier at epoch {epoch+1}")
+                print(f"[CLASSIFIER] Early stopping at epoch {epoch+1}")
                 break
     if best_state is not None:
         model.load_state_dict(best_state)
@@ -401,6 +402,41 @@ def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorize
     return {"top_users": results}
 
 
+# Predict expected number of retweets for a given tweet
+def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, cutoff_minutes=1440):
+    """
+    Estimate expected number of users who will retweet tweet_text.
+    - If model_clf is provided, sum predicted probabilities across all users (expected value).
+    - Otherwise use regressor model_reg as fallback: count users with predicted delay <= cutoff_minutes.
+    Returns a dict with expected count and optional details.
+    """
+    t_vec = vectorizer.transform([tweet_text])
+    t_vec = svd.transform(t_vec)[0]
+    t_vec = scaler_text.transform(t_vec.reshape(1, -1))[0]
+
+    if model_clf is not None:
+        total_prob = 0.0
+        with torch.no_grad():
+            for u_id, u_emb in user_embeddings.items():
+                u = u_emb / (np.linalg.norm(u_emb) + 1e-12)
+                x = np.hstack([u, t_vec])
+                p = model_clf(torch.tensor(x, dtype=torch.float32).unsqueeze(0)).item()
+                total_prob += p
+        return {"expected_retweets": float(total_prob)}
+    else:
+        # fallback: use regressor to predict delay and count those within cutoff
+        count = 0
+        with torch.no_grad():
+            for u_id, u_emb in user_embeddings.items():
+                u = u_emb / (np.linalg.norm(u_emb) + 1e-12)
+                x = np.hstack([u, t_vec])
+                log_delay = model_reg(torch.tensor(x, dtype=torch.float32).unsqueeze(0)).item()
+                delay = float(np.expm1(log_delay))
+                if delay <= cutoff_minutes:
+                    count += 1
+        return {"predicted_retweeters_count": int(count), "cutoff_minutes": cutoff_minutes}
+
+
 # =========================================
 # 9. Usage example
 # =========================================
@@ -439,12 +475,19 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
     print("\n=== Final evaluation (regressor) ===")
     print(metrics)
 
+    # compute expected retweets using classifier (if available) or regressor fallback
+    expected = predict_expected_retweets(reg, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf)
+    if "expected_retweets" in expected:
+        print(f"Estimated expected retweets (sum of probabilities): {expected['expected_retweets']:.1f}")
+    else:
+        print(f"Estimated number of retweeters within {expected.get('cutoff_minutes', 1440)} minutes: {expected.get('predicted_retweeters_count')}")
+
     # example prediction using classifier + regressor
     res = predict_global_propagation(reg, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf, top_k=5)
     print("\n=== Global prediction ===")
     print(f"Top users predicted to retweet soon (user_id, prob, predicted_delay_minutes):")
     for u, p, d in res["top_users"]:
         print(f" - User {u}: prob={p:.3f}, predicted delay={d:.2f} minutes")
-
+    
     user_graph(driver, drop=True)
     driver.close()

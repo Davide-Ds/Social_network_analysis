@@ -237,7 +237,7 @@ def main(mode):
     if mode == 5:
         print("\nRunning tweet propagation prediction with Neural Networks...")
         tweet = "Elon musk went to Mars on his tesla cybertruck"
-        tweet_propagation_prediction_NN(driver, tweet, epochs=15)
+        tweet_propagation_prediction_NN(driver, tweet)
 
 
     # ----------------------------
