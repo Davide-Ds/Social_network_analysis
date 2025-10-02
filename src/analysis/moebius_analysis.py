@@ -93,7 +93,7 @@ class MoebiusAnalyzer:
                 struct_fake_count = sum(1 for l in valid_labels if l in ("false","unverified","rumor"))
                 struct_perc_fake = struct_fake_count / len(valid_labels) * 100
                 print(
-                    f"[INFO] Möbius structure #{idx}: {struct_perc_fake:.2f}% fake "
+                    f"[INFO] Moebius structure #{idx}: {struct_perc_fake:.2f}% fake "
                     f"({struct_fake_count}/{len(valid_labels)})"
                 )
 

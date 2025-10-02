@@ -3,13 +3,20 @@ import logging
 import re
 
 # Set logging level to WARNING to disable lower-level logs
-logging.basicConfig(level=logging.WARNING)
+#logging.basicConfig(level=logging.WARNING)
 
 def load_tweets_and_labels(path_tweets, path_labels):
     """
     Load tweets from source_tweets.txt and update them with labels from label.txt.
     source_tweets.txt format: tweet_id <tab> text_content
     label.txt format: label:tweet_id
+    
+    Args:
+        path_tweets (str): Path to source_tweets.txt
+        path_labels (str): Path to label.txt
+    
+    Returns:
+        dict: Mapping from tweet_id to {'text_content': ..., 'label': ..., 'created_by': ...}
     """
     tweets = {}
     with open(path_tweets, 'r', encoding='utf-8') as f:
@@ -46,43 +53,65 @@ def classify_relation(S_user, S_tweet, S_time, p_user, p_tweet, p_time, c_user, 
     - Case 6 (INTERACTION_RETURN_TO_SOURCE): if the parent has a different tweetId and the child has the source's tweetId
     - Case 7 (INTERACTION_PARENT_OF_PARENT): a node is parent of a node that was previously its parent. user_ids and tweetIDs different, p_time > c_time
     - All other cases are classified as INTERACTION_OTHERS.
+    
+    Args:
+        S_user (str): Source user ID.
+        S_tweet (str): Source tweet ID.
+        S_time (float): Source tweet creation time.
+        p_user (str): Parent user ID.
+        p_tweet (str): Parent tweet ID.
+        p_time (float): Parent tweet creation time.
+        c_user (str): Child user ID.
+        c_tweet (str): Child tweet ID.
+        c_time (float): Child tweet creation time.
+    
+    Returns:
+        str: Relation type (RETWEET, QUOTE, INTERACTION, etc.)
     """
 
     relation = "Not Identified"
-    
-    if c_time < p_time:            #case 4: anomalia tempo, il nodo figlio è nato prima di suo padre
-        relation = "INTERACTION"   
-    elif p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6: # Il nodo padre è il source S
+    #Case 4: time anomaly: child time < parent time
+    if c_time < p_time:            #Case 4: time anomaly: child time < parent time
+        relation = "INTERACTION"
+    # parent node is S
+    elif p_user == S_user and p_tweet == S_tweet and abs(p_time - S_time) < 1e-6: 
         if c_tweet == S_tweet:
             if c_user != S_user and c_time > S_time:
-                relation = "RETWEET"   # Caso 1: RETWEET_L1
+                relation = "RETWEET"   # Case 1: RETWEET_L1
             else:
                 relation = "INTERACTION"
         else:
-            relation = "QUOTE"         # Caso 2: QUOTE
-    else:  # Nodo padre non è S
+            relation = "QUOTE"         # Case 2: QUOTE
+    else:  # Parent node is not S
         if p_tweet == S_tweet and c_tweet == S_tweet and c_time > p_time:
-            relation = "RETWEET"       # Caso 3: RETWEET (livello >1)
+            relation = "RETWEET"       # Case 3: RETWEET (level >1)
         elif p_tweet != S_tweet and c_tweet == S_tweet:
-            relation = "INTERACTION"   # Caso 6: Ritorno al source tweetID
+            relation = "INTERACTION"   # Case 6: Return to source tweetID
         elif p_tweet == S_tweet and c_tweet != S_tweet:
-            relation = "QUOTE"   # citazione di un retweet
+            relation = "QUOTE"   # Case 2: QUOTE
         elif p_tweet != S_tweet and c_tweet != p_tweet and c_time > p_time:
-            relation = "QUOTE"   # citazione di una citazione (Quote_Ln)
+            relation = "QUOTE"   # Case 5: QUOTE (level >1)
         else:
-            relation = "INTERACTION"   # Altri casi ambigui incluso Caso 7: Padre del padre
-    
-    return relation   
+            relation = "INTERACTION"   # Other ambiguous cases including Case 7: Parent of parent
+
+    return relation
 
 def process_tree_files(path_tree_files, tweets):
     """
     Process each file in the tree folder.
+    
     For each file:
-      - Use the filename (without .txt) as tweet_id.
-      - Read the first line to extract the creator and update tweets dict with 'created_by'.
-      - For following lines, extract relations and classify them using classify_relation.
-    Returns a list of tuples:
-      (p_user, p_tweet, p_time, c_user, c_tweet, c_time, relation_type)
+    - Use the filename (without .txt) as tweet_id.
+    - Read the first line to extract the creator and update tweets dict with 'created_by'.
+    - For following lines, extract relations and classify them using classify_relation.
+    
+    Args:
+        path_tree_files (str): Path to the directory containing tree files.
+        tweets (dict): Mapping from tweet_id to tweet data.
+    
+    Returns:
+        list of tuples: Each tuple contains 
+        (p_user, p_tweet, p_time, c_user, c_tweet, c_time, relation_type)
     """
     retweet_relations = []
     pattern = re.compile(r"\['([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\]\s*->\s*\['([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\]")
@@ -96,10 +125,10 @@ def process_tree_files(path_tree_files, tweets):
                 lines = f.readlines()
                 if not lines:
                     continue
-                # La prima riga definisce il source S
+                # The first line defines the source S
                 header = pattern.match(lines[0].strip())
                 if header:
-                    # Ignoriamo la parte sinistra e usiamo la parte destra per definire S
+                    # Ignore the left part and use the right part to define S
                     _, _, _, S_user, S_tweet, S_time_str = header.groups()
                     try:
                         S_time = float(S_time_str)
@@ -110,8 +139,8 @@ def process_tree_files(path_tree_files, tweets):
                 else:
                     logging.warning(f"First line malformed in {file_path}: {lines[0].strip()}")
                     continue
-                
-                # Processa le righe successive
+
+                # Process the following lines
                 for line in lines[1:]:
                     header = pattern.match(line.strip())
                     if not header:
@@ -132,7 +161,14 @@ def process_tree_files(path_tree_files, tweets):
 
 def import_tweet_nodes(driver, tweets):
     """
-    Use a session to create Tweet nodes and CREATES relationships
+    Use a session to create Tweet nodes and CREATES relationships.
+    
+    Args:
+        driver: Neo4j driver instance.
+        tweets (dict): Mapping from tweet_id to tweet data.
+    
+    Returns: 
+        None
     """
     with driver.session() as session:
         for tweet_id, data in tweets.items():
@@ -149,8 +185,8 @@ def import_tweet_nodes(driver, tweets):
                         created_by=data.get('created_by', "Unknown")
                     )
                     logging.info(f"Tweet node {tweet_id} created/updated with created_by={data.get('created_by', 'Unknown')}")
-                    
-                    # Crea la relazione CREATES
+
+                    # Create the CREATES relationship
                     session.run(
                         """
                         MERGE (u:User {user_id: $created_by})
@@ -165,6 +201,17 @@ def import_tweet_nodes(driver, tweets):
                     logging.error(f"Error processing tweet {tweet_id}: {e}")
 
 def import_retweets(driver, retweet_relations, batch_size=1000):
+    """
+    Import retweet and other relations into Neo4j using batching and APOC procedures.
+    
+    Args:
+        driver: Neo4j driver instance.
+        retweet_relations (list): List of retweet relations to import.
+        batch_size (int): Number of relations to process in each batch.
+    
+    Returns: 
+        None
+    """
     logging.info("Importing relations (RETWEET, QUOTE, INTERACTION, etc.) into Neo4j...")
     batch = []
     user_batch = []
@@ -195,7 +242,14 @@ def import_retweets(driver, retweet_relations, batch_size=1000):
 
 def _process_batch(session, batch):
     """
-    Use APOC to dynamically create relationship types; set created_by on Tweet when relation is CREATES
+    Use APOC to dynamically create relationship types; set created_by on Tweet when relation is CREATES.
+    
+    Args:
+        session: Neo4j session. 
+        batch: List of tuples (user_id, tweet_id, creation_delay, relation_type)
+    
+    Returns: 
+        None
     """
     query = """
     UNWIND $batch AS row
@@ -216,7 +270,14 @@ def _process_batch(session, batch):
 
 def _process_user_batch(session, user_batch):
     """
-    Create RETWEETED_FROM relationships between users and attach the retweeted tweet id as property
+    Create RETWEETED_FROM relationships between users and attach the retweeted tweet id as property.
+    
+    Args:
+        session: Neo4j session.
+        user_batch: List of tuples (child_user_id, parent_user_id, tweet_id)
+    
+    Returns: 
+        None
     """
     query = """
     UNWIND $batch AS row
@@ -229,7 +290,13 @@ def _process_user_batch(session, user_batch):
 
 def create_indexes(driver):
     """
-    Create indexes on User.user_id and Tweet.tweet_id
+    Create indexes on User.user_id and Tweet.tweet_id.
+    
+    Args:
+        driver: Neo4j driver instance.
+    
+    Returns: 
+        None
     """
     with driver.session() as session:
         session.run("CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.user_id)")

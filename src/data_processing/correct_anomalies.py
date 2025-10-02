@@ -3,13 +3,20 @@ import re
 import logging
 from collections import defaultdict
 
-logging.basicConfig(level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
 
 def parse_tree_file(filepath):
     """
-    Legge un file tree e restituisce una lista di edge.
-    Ogni edge è una tupla:
+    Reads a tree file and returns a list of edges.
+    
+    Each edge is a tuple: 
     (line, parent_tid, child_tid, parent_time, child_time, line_number)
+    
+    Args:
+        filepath (str): Path to the tree file.
+        
+    Returns:
+        list of tuples: Each tuple contains (line, parent_tid, child_tid, parent_time
     """
     with open(filepath, "r", encoding="utf-8") as f:
         next(f)  # Salta la prima riga (presumibilmente la radice)
@@ -28,22 +35,29 @@ def parse_tree_file(filepath):
 
 def correct_anomalies_in_edges(edges):
     """
-    Applica alcune regole di correzione:
-      - Se il tempo del figlio è minore di quello del padre, forza il figlio a partire al medesimo tempo del padre.
-      - Per un tweet figlio con più genitori, si mantiene la relazione con il delay minore.
-      - Rimuove eventuali edge in cui il tweet appare sia come genitore che come figlio (cicli auto-riferiti).
-    Restituisce una lista di edge corretti.
+    Applies correction rules:
+      - If the child's time is less than the parent's time, set the child's time equal to the parent's time.
+      - For a child tweet with multiple parents, keep the relation with the smallest delay.
+      - Removes edges where the tweet appears as both parent and child (self-referential cycles).
+    
+    Returns a list of corrected edges.
+    
+    Args:
+        edges (list of tuples): List of edges as returned by parse_tree_file.
+        
+    Returns:
+        list of tuples: Corrected list of edges.
     """
-    # Regola 1: Correggi i delay negativi (child_time < parent_time)
+    # Rule 1: Fix negative delays (child_time < parent_time)
     corrected_edges = []
     for edge in edges:
         line, parent_tid, child_tid, parent_time, child_time, line_number = edge
         if child_time < parent_time:
-            logging.info(f"Correzione: per edge a ln {line_number} il child_time ({child_time}) < parent_time ({parent_time}). Imposto child_time = {parent_time}.")
+            logging.info(f"Correction: per edge in ln {line_number} child_time ({child_time}) < parent_time ({parent_time}). Set child_time = {parent_time}.")
             child_time = parent_time
         corrected_edges.append((line, parent_tid, child_tid, parent_time, child_time, line_number))
-    
-    # Regola 2: Per tweet figlio con più genitori, mantieni quello con il delay minore
+
+    # Rule 2: For child tweet with multiple parents, keep the one with the smallest delay
     grouped = defaultdict(list)
     for edge in corrected_edges:
         _, parent_tid, child_tid, parent_time, child_time, line_number = edge
@@ -51,21 +65,25 @@ def correct_anomalies_in_edges(edges):
     
     filtered_edges = []
     for child_tid, edge_list in grouped.items():
-        # Se più edge per lo stesso child_tid, sceglie quello con il child_time minore
+        # If multiple edges for the same child_tid, choose the one with the smallest child_time
         best_edge = min(edge_list, key=lambda x: x[4])
         filtered_edges.append(best_edge)
-    
-    # Regola 3: Rimuovi gli edge in cui il tweet è sia padre che figlio (cicli)
+
+    # Rule 3: Remove edges where the tweet is both parent and child (cycles)
     final_edges = [edge for edge in filtered_edges if edge[1] != edge[2]]
     
     return final_edges
 
 def process_all_tree_files(data_dir):
     """
-    Processa tutti i file tree nella cartella data_dir,
-    applicando il parsing e la correzione delle anomalie.
-    Restituisce un dizionario:
-       chiave = nome_file, valore = lista di edge corretti.
+    Process all tree files in the data_dir folder,
+    applying parsing and anomaly correction.
+    
+    Args:
+        data_dir (str): Path to the directory containing tree files.
+    
+    Returns:
+        dict: Mapping from filename to list of corrected edges.
     """
     corrected_data = {}
     for filename in os.listdir(data_dir):
@@ -77,20 +95,31 @@ def process_all_tree_files(data_dir):
     return corrected_data
 
 def import_corrected_retweets(driver, corrected_tree_data, retweet_limit=50000000):
+    """
+    Imports corrected retweet relationships into the Neo4j database.
+    
+    Args:
+        driver: Neo4j driver.
+        corrected_tree_data: dict mapping filename to list of corrected edges.
+        retweet_limit: maximum number of retweets to import.
+    
+    Returns: 
+        None
+    """
     with driver.session() as session:
         for filename, edges in corrected_tree_data.items():
-            # Recupera l'ID del tweet dal nome del file (ad es., "498430783699554305.txt" -> "498430783699554305")
+            # Retrieve the tweet ID from the filename (e.g., "498430783699554305.txt" -> "498430783699554305")
             tweet_id = filename.replace(".txt", "")
             for edge in edges:
                 # edge: (line, parent_tid, child_tid, parent_time, child_time, line_number)
                 _, parent_tid, child_tid, _, child_time, _ = edge
-                # Verifica che il tweet originale esista, se necessario
-                # Crea il nodo per l'utente che retweetta
+                # Check if the original tweet exists, if necessary
+                # Create the node for the user who retweets
                 session.run(
                     "MERGE (u:User {id: $user_id})",
-                    user_id=child_tid  # supponiamo che child_tid rappresenti l'ID dell'utente che retweetta
+                    user_id=child_tid  # assume child_tid represents the ID of the user who retweets
                 )
-                # Crea la relazione RETWEETS con il delay corretto
+                # Create the RETWEETS relationship with the corrected delay
                 session.run(
                     "MATCH (u:User {id: $user_id}) "
                     "MATCH (t:Tweet {id: $tweet_id}) "

@@ -23,10 +23,12 @@ class Neo4jCleaner:
     def from_credentials(cls, uri, user, password):
         """
         Alternative constructor to initialize the Neo4jCleaner with URI, username, and password.
-        :param uri: The URI of the Neo4j database.
-        :param user: Username for authentication.
-        :param password: Password for authentication.
-        :return: An instance of Neo4jCleaner.
+        Args:
+            uri (str): The URI of the Neo4j database.
+            user (str): The username for authentication.
+            password (str): The password for authentication.
+        Returns: 
+            Neo4jCleaner instance.
         """
         driver = GraphDatabase.driver(uri, auth=(user, password))
         return cls(driver)
@@ -81,7 +83,8 @@ class Neo4jCleaner:
     def is_database_empty(self):
         """
         Check if the database is already empty.
-        :return: True if the database is empty, False otherwise.
+        Returns:
+            bool: True if the database is empty, False otherwise.
         """
         with self.driver.session() as session:
             result = session.run("MATCH (n) RETURN COUNT(n) AS count")

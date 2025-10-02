@@ -1,24 +1,24 @@
 import sys  
-from data_processing.empty_db import Neo4jCleaner
-from analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
-from utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
-from data_processing.import_data import (
+from .data_processing.empty_db import Neo4jCleaner
+from .analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
+from .utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
+from .data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
     import_tweet_nodes,
     import_retweets,
 )
-from analysis.graph_analysis import *
-from clustering.community_detection import *  # Import the missing function
-from propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
+from .analysis.graph_analysis import *
+from .clustering.community_detection import *  # Import the missing function
+from .propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
 import os
-from logs.log_writer import setup_logging
-from analysis.fractal_analysis import calculate_fractal_dimension
-from analysis.moebius_analysis import MoebiusAnalyzer
-from classification.tweet_classifier import train_and_evaluate  # ML classification function
+from .logs.log_writer import setup_logging
+from .analysis.fractal_analysis import calculate_fractal_dimension
+from .analysis.moebius_analysis import MoebiusAnalyzer
+from .classification.tweet_classifier import train_and_evaluate  # ML classification function
 from sklearn.model_selection import StratifiedKFold, cross_validate
 # Initialize logging (default folder: utils)
-setup_logging()
+
 
 
 def main(mode):
@@ -34,6 +34,7 @@ def main(mode):
     Args:
         mode (int): Operation mode
     """
+    setup_logging()
     # Paths to data
     path_source_tweets = os.path.join("data", "twitter16", "source_tweets.txt")
     path_labels = os.path.join("data", "twitter16", "label.txt")
@@ -77,15 +78,15 @@ def main(mode):
     # ----------------------------
     if mode == 2:
         # Basic graph analysis
-        print("\n Retrieving basic statistics...")
+        print("\nRetrieving basic statistics...")
         stats = basic_statistics(driver)
-        print(f"Statistiche di base: {stats}")
+        print(f"Basic statistics: {stats}")
 
-        print("\nRecupero statistiche sulle classi...")
+        print("\nRetrieving class statistics...")
         class_statistics = get_class_stats(driver)
-        print(f"Statistiche per classe:\n {class_statistics}\n")
-        
-        print("\nIdentificazione degli utenti più retweettati...")
+        print(f"Class statistics:\n {class_statistics}\n")
+            # Identify most retweeted users
+        print("\nIdentifying most retweeted users...")
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Users found: {most_retweeted}")
 

@@ -4,7 +4,14 @@ logging.getLogger("neo4j").setLevel(logging.CRITICAL)
 
 
 def basic_statistics(driver):
-    """Restituisce statistiche di base sul grafo."""
+    """Compute basic statistics of the graph: number of tweets, users, retweets.
+    
+    Args:
+        driver: Neo4j driver.
+        
+    Returns:
+        dict with num_tweets, num_users, num_retweets.    
+    """
     stats_queries = {
         "num_tweets": "MATCH (t:Tweet) RETURN count(t) AS value",
         "num_users": "MATCH (u:User) RETURN count(u) AS value",
@@ -18,7 +25,15 @@ def basic_statistics(driver):
     return stats
 
 def find_frequent_retwetters(driver, top_n=10):
-    """Trova gli utenti che retweettano maggiormente."""
+    """Find the users who retweet the most.
+    
+    Args:
+        driver: Neo4j driver.
+        top_n: number of top users to return.
+         
+    Returns:
+        List of dicts with user_id and retweet_count.
+     """
     query = """
     MATCH (u:User)-[:RETWEET]->(t:Tweet)
     RETURN u.user_id AS user, count(t) AS retweet_count
@@ -31,7 +46,14 @@ def find_frequent_retwetters(driver, top_n=10):
 
 def find_most_retweeted_users(driver, top_n=10):
     """
-    Trova gli n utenti con il maggior numero di utenti distinti che li hanno retweettati.
+    Find the users with the highest number of distinct users who retweeted them.
+    
+    Args:
+        driver: Neo4j driver.
+        top_n: number of top users to return.
+    
+    Returns:
+        List of dicts with user_id and num_retweeters.    
     """
     query = """
     MATCH (u:User)<-[:RETWEETED_FROM]-(r:User)
@@ -45,16 +67,24 @@ def find_most_retweeted_users(driver, top_n=10):
         return [{"user": record["user"], "num_retweeters": record["num_retweeters"]} for record in result]
 
 def analyze_diffusion_patterns(driver, tweet_id):
-    """Analizza la diffusione di un tweet specifico per livello."""
+    """Analyze the diffusion of a specific tweet by level.
+    
+    Args:
+        driver: Neo4j driver.
+        tweet_id: ID of the tweet to analyze.
+    
+    Returns:
+        List of dicts with hop_level, num_users_at_level, users_at_level, paths_at_level.
+    """
     query = """
-    // 1. Trova il nodo Tweet e prendi l'autore
+    // 1. Find the Tweet node and get the author
     MATCH (t:Tweet {tweet_id: $tweet_id})
     WITH t.created_by AS sourceUserId, $tweet_id AS tweetId
 
-    // 2. Trova il nodo utente autore
+    // 2. Find the author user node
     MATCH (source:User {user_id: sourceUserId})
 
-    // 3. Spanning tree da source su relazioni RETWEETED_FROM
+    // 3. Spanning tree from source on RETWEETED_FROM relationships
     CALL apoc.path.spanningTree(
       source,
       {
@@ -67,10 +97,10 @@ def analyze_diffusion_patterns(driver, tweet_id):
     )
     YIELD path
 
-    // 4. Filtra i path dove tutte le relazioni sono per quel tweet
+    // 4. Filter the paths where all relationships are for that tweet
     WHERE ALL(rel IN relationships(path) WHERE rel.tweet_id = tweetId)
 
-    // 5. Prendi solo l'utente all'estremo del path (esattamente al livello corrente)
+    // 5. Take only the user at the end of the path (exactly at the current level)
     WITH length(path) AS hop_level, last(nodes(path)) AS user, path
     WHERE hop_level > 0
 
@@ -95,11 +125,20 @@ def analyze_diffusion_patterns(driver, tweet_id):
                 diffusion_levels.append(level_data)
             return diffusion_levels
         except Exception as e:
-            logging.error(f"Errore durante l'esecuzione della query: {e}")
+            logging.error(f"Error occurred while analyzing diffusion patterns: {e}")
             return []
 
 
 def get_most_retweeted_tweet(driver):
+    """
+    Returns the tweet_id of the most retweeted tweet.
+    
+    Args:
+        driver: Neo4j driver.
+    
+    Returns:
+        tweet_id of the most retweeted tweet or None if no tweets found.
+    """
     query = """
     MATCH (t:Tweet)<-[r:RETWEET]-()
     RETURN t.tweet_id AS tweet_id, COUNT(r) AS retweet_count
@@ -113,7 +152,19 @@ def get_most_retweeted_tweet(driver):
 
 
 def create_User_gds_graph(driver):
-    """Crea un grafo GDS (Graph Data Science) chiamato 'myGraph' se non esiste già. Natural orientation usa la direzione nel db, meglio per il page rank"""
+    """
+    Creates a GDS (Graph Data Science) graph called 'myGraph' if it 
+    doesn't already exist. 
+    Natural orientation uses the direction in the db, better for PageRank.
+    
+    The graph includes:
+    
+      - User nodes
+      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
+    
+    Args:
+        driver: Neo4j driver.
+    """
     query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
     query_create = """
     CALL gds.graph.project(
@@ -157,9 +208,13 @@ def create_User_gds_graph(driver):
 def create_complete_gds_graph(driver):    
     """
     Creates a complete GDS graph 'fullGraph' with:
+    
       - User nodes (property: pagerank)
       - Tweet nodes (property: text_embedding)
-      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
+      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION.
+    
+    Args:
+        driver: Neo4j driver. 
     """
     query_drop = "CALL gds.graph.drop('fullGraph', false) YIELD graphName"
     query_create = """
@@ -194,6 +249,13 @@ def compute_pagerank(driver, top_n=10):
     """
     Calculates the PageRank of users, saves it as the 'pagerank' property in User nodes,
     and returns the top_n most influential users.
+    
+    Args:
+        driver: Neo4j driver.
+        top_n: number of top users to return.
+    
+    Returns:
+        List of dicts with user_id and pagerank score.
     """
     # Compute and write the PageRank in User nodes as property 'pagerank'
     write_query = """
@@ -214,7 +276,17 @@ def compute_pagerank(driver, top_n=10):
 
 
 def get_top_fake_news_creators(driver, top_n=10):
-    """Returns the top fake news creators with details about their tweets and retweets."""
+    """
+    Returns the top fake news creators with details 
+    about their tweets and retweets.
+    
+    Args:
+        driver: Neo4j driver.
+        top_n: number of top creators to return.
+    
+    Returns:
+        List of top fake news creators with their tweet details.
+    """
     query = """
     MATCH (u:User)-[:CREATES]->(t:Tweet)
     WITH u, 
@@ -258,7 +330,16 @@ def get_top_fake_news_creators(driver, top_n=10):
             return []
 
 def get_class_stats(driver):
-    """Return aggregate statistics for tweet classes (only tweets with non-null labels)."""
+    """
+    Compute aggregate statistics for tweet classes 
+    (only tweets with non-null labels).
+    
+    Args:
+        driver: Neo4j driver.
+    
+    Returns:
+        DataFrame with aggregate statistics for each tweet class.
+    """
     query = """
     MATCH (t:Tweet)
     WHERE t.tweet_label IS NOT NULL

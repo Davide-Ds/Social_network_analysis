@@ -5,6 +5,20 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 def leiden_user_communities(driver, graph_name="userGraph"):
+    """
+    Detects communities of users using the Leiden algorithm on a graph.
+    
+    The graph includes:    
+        - User nodes
+        - Relationships: RETWEETED_FROM (undirected)
+    
+    Args:
+        driver: Neo4j driver.
+        graph_name: name of the GDS graph to create/use.
+    
+    Returns:
+        DataFrame with user_id and communityId for each user.
+    """
     with driver.session() as session:
         # Remove any existing graph with the same name
         session.run(f"CALL gds.graph.drop('{graph_name}', false)")  
@@ -22,7 +36,7 @@ def leiden_user_communities(driver, graph_name="userGraph"):
         """
         session.run(project_query).consume()
 
-        # Esegui Leiden sul grafo
+        # Execute the Leiden algorithm
         leiden_query = f"""
         CALL gds.leiden.stream('{graph_name}')
         YIELD nodeId, communityId
@@ -30,38 +44,44 @@ def leiden_user_communities(driver, graph_name="userGraph"):
         """
         results = session.run(leiden_query)
 
-        # Porta i risultati in un DataFrame Pandas
+        # Convert results to a Pandas DataFrame
         df = pd.DataFrame([dict(record) for record in results])
 
-        # Droppa il grafo per liberare memoria
+        # Drop the graph to free memory
         session.run(f"CALL gds.graph.drop('{graph_name}')").consume()
 
     # Add user count per cluster
     community_sizes = df["communityId"].value_counts().reset_index()
     community_sizes.columns = ["communityId", "community_size"]
 
-    # Join con il DataFrame originale
+    # Join with original dataframe
     df = df.merge(community_sizes, on="communityId", how="left")
 
     return df
 
 def export_cluster_size_distribution(df, output_csv_path=None):
     """
-    Take the DataFrame produced by leiden_user_communities (must contain 'community_size')
-    and produce a CSV with columns:
-      community_size, #communities
-    Returns the distribution DataFrame.
+    Produce a CSV with columns 'community_size' and '#communities'
+    from the DataFrame produced by `leiden_user_communities`.
+
+    Args:
+        df (pandas.DataFrame): DataFrame returned by `leiden_user_communities`
+            (must contain 'community_size').
+        output_csv_path (str, optional): output file path.
+
+    Returns:
+        pandas.DataFrame: DataFrame with columns 'community_size' and '#communities'.
     """
     if "community_size" not in df.columns:
         raise ValueError("Il DataFrame deve contenere la colonna 'community_size'.")
 
-    # Considera ogni community una sola volta (in caso il df contenga più righe per community)
+    # Consider each community only once (in case the df contains multiple rows per community)
     communities = df[["communityId", "community_size"]].drop_duplicates(subset="communityId")
 
-    # Conta quante community per ciascuna dimensione e ottieni un DataFrame con colonne originali
+    # Count how many communities for each size and get a DataFrame with the original columns
     dist = communities.groupby("community_size").size().reset_index(name="#communities")
 
-    # Ordina per community_size e salva CSV (non rinominiamo le colonne)
+    # Sort by community_size and save CSV (do not rename columns)
     dist = dist.sort_values("community_size", ascending=False)
     if output_csv_path:
         dist.to_csv(output_csv_path, index=False, encoding="utf-8")
@@ -72,22 +92,32 @@ def export_cluster_size_distribution(df, output_csv_path=None):
 def export_users_ordered_by_cluster(df, output_csv_path=None, descending=True):
     """
     Export a CSV with user_id, communityId, community_size ordered by community_size.
+    
     - df: DataFrame returned by leiden_user_communities (must contain 'user_id', 'communityId', 'community_size')
     - output_csv_path: output file path
     - descending: True to order largest clusters first
+    
     Returns the saved DataFrame.
+    
+    Args:
+        df: DataFrame returned by leiden_user_communities (must contain 'user_id', 'communityId', 'community_size')
+        output_csv_path: output file path
+        descending: True to order largest clusters first
+    
+    Returns:
+        DataFrame ordered by community_size.
     """
     required = {"user_id", "communityId", "community_size"}
     if not required.issubset(df.columns):
         raise ValueError(f"Il DataFrame deve contenere le colonne: {required}")
 
-    # Assicuriamoci di avere una riga per ogni user_id con il relativo cluster e dimensione
+    # Ensure we have one row per user_id with the corresponding cluster and size
     users = df[["user_id", "communityId", "community_size"]].drop_duplicates(subset=["user_id"])
 
-    # Ordina per dimensione del cluster (desc per default) e per communityId per stabilità
+    # Sort by cluster size (descending by default) and by communityId for stability
     users = users.sort_values(by=["community_size", "communityId"], ascending=[not descending, True])
 
-    # Salva CSV con intestazione: user_id, communityId, community_size
+    # Save CSV with header: user_id, communityId, community_size
     if output_csv_path:
         users.to_csv(output_csv_path, index=False, encoding="utf-8")
         print(f"Elenco completo utenti per cluster salvato in {output_csv_path}")
@@ -98,17 +128,28 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
     """
     Analyzes the communities computed by leiden_user_communities.
     For each community:
-      - num_users
-      - top most retweeted users
-      - dominant tweet class + percentage distribution
-      - most frequent keywords
+    
+    - num_users
+    - top most retweeted users
+    - dominant tweet class + percentage distribution
+    - most frequent keywords
+    
     If output_csv_path is specified, saves the results to a CSV ordered by community size.
+    
+    Args:
+        driver: Neo4j driver.
+        df: DataFrame returned by leiden_user_communities (must contain 'user_id', 'communityId')
+        max_communities: maximum number of top communities to analyze
+        output_csv_path: output file path
+    
+    Returns:        
+        DataFrame with the analysis results.
     """
     community_data = []
 
     with driver.session() as session:     
         community_groups = df.groupby("communityId")
-        # ordina per dimensione decrescente
+        # Sort by size descending
         top_communities = community_groups.size().sort_values(ascending=False).head(max_communities).index
 
         for comm_id in top_communities:
@@ -118,7 +159,7 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
 
             users = group["user_id"].tolist()
 
-            # --- 1. Top utenti più retwittati nella community ---
+            # --- 1. Top users by retweet count in the community ---
             top_users_query = """
             MATCH (u:User)<-[:RETWEETED_FROM]-(v:User)
             WHERE u.user_id IN $users AND v.user_id IN $users
@@ -129,7 +170,7 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
             top_users = session.run(top_users_query, users=users).data()
             top_users_str = ", ".join([f"{r['user']} ({r['retweet_count']})" for r in top_users])
 
-            # --- 2. Tweet della community ---
+            # --- 2. Community tweets ---
             tweets_query = """
             MATCH (u:User)-[:CREATES|RETWEET]->(t:Tweet)
             WHERE u.user_id IN $users AND t.text IS NOT NULL
@@ -140,7 +181,7 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
             texts = [t["text"] for t in tweets if t["text"]]
             labels = [t["label"] for t in tweets if t["label"]]
 
-            # Distribuzione delle classi
+            # Distribution of classes
             label_dist = Counter(labels)
             total = sum(label_dist.values())
             if total > 0:
@@ -152,7 +193,7 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
                 dominant_label = None
 
             # --- 3. Keywords ---
-            # Estrai keyword dai tweet della community
+            # Extract keywords from community tweets
             keywords = extract_keywords(texts, top_k=10)
 
 
@@ -165,7 +206,7 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
                 "keywords": keywords
             })
 
-    # Mettiamo tutto in DataFrame e ordiniamo per dimensione
+    # Put everything into a DataFrame and sort by size
     df_analysis = pd.DataFrame(community_data)
     df_analysis = df_analysis.sort_values("num_users", ascending=False).reset_index(drop=True)
 
@@ -175,12 +216,16 @@ def analyze_communities(driver, df, max_communities=5, output_csv_path=None):
 
     return df_analysis
 
-
-# Carica modello spaCy (scegli en_core_web_sm o it_core_news_sm)
-nlp = spacy.load("en_core_web_sm")  
-
 def preprocess_texts(texts):
-    """Pulisce e lemmatizza i testi con spaCy"""
+    """Cleans and lemmatizes texts with spaCy.
+    
+    Args:
+        texts: list of strings
+        
+    Returns: cleaned texts
+    """
+    # Load spaCy model (choose en_core_web_sm or it_core_news_sm)
+    nlp = spacy.load("en_core_web_sm")  
     docs = nlp.pipe(texts, disable=["ner", "parser"])
     cleaned = []
     for doc in docs:
@@ -193,7 +238,15 @@ def preprocess_texts(texts):
     return cleaned
 
 def extract_keywords(texts, top_k=10):
-    """Estrae keywords con TF-IDF"""
+    """Extracts keywords using TF-IDF.
+    
+    Args:
+        texts: list of strings
+        top_k: number of top keywords to return
+    
+    Returns:
+        List of top_k keywords
+    """
     if not texts:
         return []
     cleaned = preprocess_texts(texts)
