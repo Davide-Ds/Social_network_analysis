@@ -16,7 +16,7 @@ from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension
 from analysis.moebius_analysis import MoebiusAnalyzer
 from classification.tweet_classifier import train_and_evaluate  # ML classification function
-
+from sklearn.model_selection import StratifiedKFold, cross_validate
 # Initialize logging (default folder: utils)
 setup_logging()
 
@@ -121,18 +121,15 @@ def main(mode):
         print("Top influential users (PageRank):")
         for user in top_users:
             print(f"User: {user['user']}, Score: {user['score']:.2f}")
+            
         # Analyze top fake news creators
         print("\nAnalyzing top fake news creators...")
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
         print("Top influential fake news creators:")
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
-
-        print("Computing embeddings for tweets using all-MiniLM-L6-v2 model...")    
-        compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
-        print("Creating complete GDS graph with User and Tweet nodes...")
-        create_complete_gds_graph(driver)
         
+        # Link Prediction using GraphSAGE embeddings
         """
         Link Prediction Example using GraphSAGE Embeddings.
 
@@ -147,12 +144,20 @@ def main(mode):
         - numpy
         - scikit-learn
         """
-
+        print("Computing embeddings for tweets using all-MiniLM-L6-v2 model if not already present...") 
+        if(not driver.session().run("MATCH (t:Tweet) WHERE exists(t.text_embedding) RETURN t LIMIT 1").single()):
+            compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
+        print("Creating complete GDS graph with User and Tweet nodes...")
+        create_complete_gds_graph(driver)
+        
         # ---------------------------
         # Step 1: Generate embeddings
         # ---------------------------
         # Generate embeddings for User nodes
         print("\nGenerating GraphSAGE embeddings for Users...")
+        if (driver.session().run("CALL gds.model.exists('UserSAGE') YIELD exists RETURN exists").single().value()):
+            driver.session().run("CALL gds.model.drop('UserSAGE')"
+        )        
         user_embeddings = generate_graphsage_embeddings(
             driver,       # Neo4j driver instance
             graph_name="fullGraph",
@@ -160,9 +165,11 @@ def main(mode):
             dim=128,
             node_label="User"
         )
-
-        # Generate embeddings for Tweet nodes
-        print("Generating GraphSAGE embeddings for Tweets...")
+            
+        print("\nGenerating GraphSAGE embeddings for Tweets...")
+        if (driver.session().run("CALL gds.model.exists('TweetSAGE') YIELD exists RETURN exists").single().value()):
+            driver.session().run("CALL gds.model.drop('TweetSAGE')"
+            )
         tweet_embeddings = generate_graphsage_embeddings(
             driver,
             graph_name="fullGraph",
@@ -170,7 +177,7 @@ def main(mode):
             dim=128,
             node_label="Tweet"
         )
-
+        
         # ---------------------------
         # Step 2: Build link prediction dataset
         # ---------------------------
@@ -193,19 +200,69 @@ def main(mode):
         # ---------------------------
         from sklearn.ensemble import RandomForestClassifier
         print("Training Random Forest classifier...")
-        clf = RandomForestClassifier(n_estimators=100, random_state=42)
+        clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
         print(f"Training samples: {len(y_train)}, Test samples: {len(y_test)}")
+        print("Fitting model...")
         clf.fit(X_train, y_train)
 
         # ---------------------------
         # Step 5: Predict and evaluate
         # ---------------------------
+        
+        from sklearn.metrics import f1_score, accuracy_score
+
+        # Evaluation on training set
+        y_train_pred = clf.predict(X_train)
+        train_f1 = f1_score(y_train, y_train_pred)
+        train_acc = accuracy_score(y_train, y_train_pred)
+
+        # Evaluation on test set
+        y_test_pred = clf.predict(X_test)
+        test_f1 = f1_score(y_test, y_test_pred)
+        test_acc = accuracy_score(y_test, y_test_pred)
+        
+        print("\nConfronto metriche:")
+        print(f"Training set - F1-score: {train_f1:.4f}, Accuracy: {train_acc:.4f}")
+        print(f"Test set     - F1-score: {test_f1:.4f}, Accuracy: {test_acc:.4f}")
         print("Evaluating model...")
         y_pred = clf.predict(X_test)
 
-        from sklearn.metrics import f1_score
-        print("F1-score:", f1_score(y_test, y_pred))
+        import pandas as pd
+        from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
 
+        # Compute metrics
+        metrics = {
+            "F1-score": [f1_score(y_test, y_pred)],
+            "Accuracy": [accuracy_score(y_test, y_pred)],
+            "Precision": [precision_score(y_test, y_pred)],
+            "Recall": [recall_score(y_test, y_pred)]
+        }
+
+        df_metrics = pd.DataFrame(metrics)
+        print("\nEvaluation Metrics:\n")
+        print(df_metrics.to_string(index=False))
+
+        # Confusion Matrix
+        print("\nConfusion Matrix:\n")
+        print(confusion_matrix(y_test, y_pred))
+
+        # Cross-validation
+        print("\nPerforming 10-fold cross-validation...")
+        # Use StratifiedKFold to maintain class balance in each fold
+        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+
+        scoring = ['accuracy', 'f1', 'precision', 'recall']
+        results = cross_validate(clf, X, y, cv=cv, scoring=scoring, return_train_score=False)
+
+        # Print scores for each fold and their averages
+        print("\nCross-validation results:")
+        for metric in scoring:
+            scores = results[f'test_{metric}']
+            print(f"{metric.capitalize()} per fold: {scores}")
+            print(f"{metric.capitalize()} medio: {scores.mean():.4f} (+/- {scores.std():.4f})")
+
+
+        
         
     # ----------------------------
     # MODE 3: ML text classification
