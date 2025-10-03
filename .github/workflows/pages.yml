@@ -1,4 +1,4 @@
-﻿name: Build and publish Sphinx docs
+﻿name: Build and publish Sphinx docs (gh-pages)
 
 on:
   push:
@@ -6,11 +6,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -27,19 +29,9 @@ jobs:
         run: |
           sphinx-build -E -b html docs/source docs/build
 
-      - name: Upload artifact for GitHub Pages
-        # use v2 if available — se Github segnala ancora problema, prova a rimuovere/aggiornare questa action
-        uses: actions/upload-pages-artifact@v2
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          path: docs/build
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-      contents: read
-    steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v1
+          publish_dir: ./docs/build
+          publish_branch: gh-pages
+          # uses the default GITHUB_TOKEN, non serve creare segreti
