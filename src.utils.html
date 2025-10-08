@@ -243,63 +243,8 @@
           <section id="src-utils-package">
 <h1>src.utils package<a class="headerlink" href="#src-utils-package" title="Link to this heading">¶</a></h1>
 <p>Utilities per accesso e manipolazione di Neo4j e funzioni ausiliarie.</p>
-<section id="module-src.utils.neo4j_utils">
-<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-src.utils.neo4j_utils" title="Link to this heading">¶</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="src.utils.neo4j_utils.compute_and_save_tweet_embeddings">
-<span class="sig-prename descclassname"><span class="pre">src.utils.neo4j_utils.</span></span><span class="sig-name descname"><span class="pre">compute_and_save_tweet_embeddings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'all-MiniLM-L6-v2'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text_property</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'text'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding_property</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'text_embedding'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/utils/neo4j_utils.html#compute_and_save_tweet_embeddings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.utils.neo4j_utils.compute_and_save_tweet_embeddings" title="Link to this definition">¶</a></dt>
-<dd><p>Compute and save text embeddings for Tweet nodes using a SentenceTransformer model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>driver</strong> – Neo4j driver</p></li>
-<li><p><strong>model_name</strong> – name of the SentenceTransformer model to use</p></li>
-<li><p><strong>text_property</strong> – name of the text property to embed</p></li>
-<li><p><strong>embedding_property</strong> – name of the property to save the embedding</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>None</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="src.utils.neo4j_utils.create_indexes">
-<span class="sig-prename descclassname"><span class="pre">src.utils.neo4j_utils.</span></span><span class="sig-name descname"><span class="pre">create_indexes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/utils/neo4j_utils.html#create_indexes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.utils.neo4j_utils.create_indexes" title="Link to this definition">¶</a></dt>
-<dd><p>Create indexes on User(user_id) and Tweet(tweet_id) if they do not exist.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>driver</strong> – Neo4j driver.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="src.utils.neo4j_utils.get_neo4j_driver">
-<span class="sig-prename descclassname"><span class="pre">src.utils.neo4j_utils.</span></span><span class="sig-name descname"><span class="pre">get_neo4j_driver</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/utils/neo4j_utils.html#get_neo4j_driver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.utils.neo4j_utils.get_neo4j_driver" title="Link to this definition">¶</a></dt>
-<dd><p>Create and return a Neo4j driver using environment variables for configuration.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>None</strong></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="src.utils.neo4j_utils.serialize_path">
-<span class="sig-prename descclassname"><span class="pre">src.utils.neo4j_utils.</span></span><span class="sig-name descname"><span class="pre">serialize_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/utils/neo4j_utils.html#serialize_path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.utils.neo4j_utils.serialize_path" title="Link to this definition">¶</a></dt>
-<dd><p>Serialize a Neo4j path object into a JSON-serializable format.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> – Neo4j path object.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON-serializable representation of the path.</p>
-</dd>
-</dl>
-</dd></dl>
-
+<section id="module-contents">
+<h2>Module contents<a class="headerlink" href="#module-contents" title="Link to this heading">¶</a></h2>
 </section>
 </section>
 
@@ -351,13 +296,7 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">src.utils package</a><ul>
-<li><a class="reference internal" href="#module-src.utils.neo4j_utils">Module contents</a><ul>
-<li><a class="reference internal" href="#src.utils.neo4j_utils.compute_and_save_tweet_embeddings"><code class="docutils literal notranslate"><span class="pre">compute_and_save_tweet_embeddings()</span></code></a></li>
-<li><a class="reference internal" href="#src.utils.neo4j_utils.create_indexes"><code class="docutils literal notranslate"><span class="pre">create_indexes()</span></code></a></li>
-<li><a class="reference internal" href="#src.utils.neo4j_utils.get_neo4j_driver"><code class="docutils literal notranslate"><span class="pre">get_neo4j_driver()</span></code></a></li>
-<li><a class="reference internal" href="#src.utils.neo4j_utils.serialize_path"><code class="docutils literal notranslate"><span class="pre">serialize_path()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#module-contents">Module contents</a></li>
 </ul>
 </li>
 </ul>

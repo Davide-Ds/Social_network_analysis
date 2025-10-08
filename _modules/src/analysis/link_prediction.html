@@ -235,7 +235,6 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for src.analysis.link_prediction</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">neo4j</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDatabase</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
 
 
@@ -244,6 +243,11 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">generate_graphsage_embeddings</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">128</span><span class="p">,</span> <span class="n">node_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;User&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Generate GraphSAGE embeddings for nodes of a given type in the Neo4j graph.</span>
+
+<span class="sd">    This updated version will sanitize numeric feature properties (e.g. pagerank) by</span>
+<span class="sd">    setting NULL or NaN values to 0 before calling the GDS procedures. It also wraps</span>
+<span class="sd">    train/stream calls with try/except to provide clearer diagnostics when the GDS</span>
+<span class="sd">    procedures fail due to invalid feature values.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        driver (neo4j.Driver): Neo4j driver instance.</span>
@@ -259,22 +263,36 @@
 <span class="sd">        embeddings = generate_graphsage_embeddings(driver, &quot;myGraph&quot;, &quot;UserSAGE&quot;, 128, node_label=&quot;User&quot;)</span>
 <span class="sd">        user_emb = embeddings[user_id]</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># Scegli la property giusta in base al tipo di nodo</span>
+    <span class="c1"># Choose the appropriate feature property based on node type</span>
     <span class="k">if</span> <span class="n">node_label</span> <span class="o">==</span> <span class="s2">&quot;User&quot;</span><span class="p">:</span>
         <span class="n">feature_properties</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pagerank&quot;</span><span class="p">]</span>
     <span class="k">elif</span> <span class="n">node_label</span> <span class="o">==</span> <span class="s2">&quot;Tweet&quot;</span><span class="p">:</span>
         <span class="n">feature_properties</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;text_embedding&quot;</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;node_label deve essere &#39;User&#39; o &#39;Tweet&#39;&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;node_label must be &#39;User&#39; or &#39;Tweet&#39;&quot;</span><span class="p">)</span>
 
     <span class="k">with</span> <span class="n">driver</span><span class="o">.</span><span class="n">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
+        <span class="c1"># If using pagerank as a numeric feature, ensure no NULL or NaN values remain</span>
+        <span class="k">if</span> <span class="s2">&quot;pagerank&quot;</span> <span class="ow">in</span> <span class="n">feature_properties</span><span class="p">:</span>
+            <span class="c1"># Set NULL pagerank values to 0</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;MATCH (u:User) WHERE u.pagerank IS NULL SET u.pagerank = 0 RETURN count(u) AS updated&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="c1"># ignore if permission or APOC not available; training will fail later if values invalid</span>
+                <span class="k">pass</span>
+            <span class="c1"># Some NaN values may be stored; detect NaN by comparing value to itself (NaN != NaN)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;MATCH (u:User) WHERE u.pagerank &lt;&gt; u.pagerank SET u.pagerank = 0 RETURN count(u) AS fixed&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+
         <span class="c1"># Step 1: Train GraphSAGE model</span>
-        <span class="c1"># Elimina il modello se esiste già</span>
+        <span class="c1"># Drop model if it already exists (ignore failure)</span>
         <span class="n">drop_query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CALL gds.beta.model.drop(&#39;</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">&#39;) YIELD modelName&quot;</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">drop_query</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-            <span class="k">pass</span>  <span class="c1"># Ignora errori se il modello non esiste</span>
+            <span class="k">pass</span>
 
         <span class="n">train_query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 <span class="s2">        CALL gds.beta.graphSage.train(&#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39;,</span>
@@ -289,7 +307,11 @@
 <span class="s2">        )</span>
 <span class="s2">        YIELD modelInfo</span>
 <span class="s2">        &quot;&quot;&quot;</span>
-        <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">train_query</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;dim&quot;</span><span class="p">:</span> <span class="n">dim</span><span class="p">})</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">train_query</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;dim&quot;</span><span class="p">:</span> <span class="n">dim</span><span class="p">})</span><span class="o">.</span><span class="n">consume</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="c1"># Re-raise with clearer context</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GraphSAGE training failed for model </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
         <span class="c1"># Step 2: Generate embeddings</span>
         <span class="n">embed_query</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
@@ -302,15 +324,17 @@
 <span class="s2">        YIELD nodeId, embedding</span>
 <span class="s2">        RETURN gds.util.asNode(nodeId).</span><span class="si">{</span><span class="n">node_label</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">_id AS node_id, embedding</span>
 <span class="s2">        &quot;&quot;&quot;</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">embed_query</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">embed_query</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GraphSAGE streaming failed for model </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
         <span class="c1"># Step 3: Convert embeddings to numpy arrays</span>
-        <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
         <span class="n">embeddings</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
-            <span class="n">node_id</span> <span class="o">=</span> <span class="n">record</span><span class="p">[</span><span class="s2">&quot;node_id&quot;</span><span class="p">]</span>
+            <span class="n">node_id</span> <span class="o">=</span> <span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;node_id&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">node_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">emb_vector</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">&quot;embedding&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+                <span class="n">emb_vector</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;embedding&quot;</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
                 <span class="n">embeddings</span><span class="p">[</span><span class="n">node_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">emb_vector</span>
 
         <span class="k">return</span> <span class="n">embeddings</span></div>
