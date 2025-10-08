@@ -1,6 +1,8 @@
 import logging
 import os
 from neo4j import GraphDatabase
+from sentence_transformers import SentenceTransformer
+
 
 def get_neo4j_driver():
     """
@@ -60,7 +62,6 @@ def compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', tex
     Returns: 
         None
     """
-    from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer(model_name)
     tweet_features = []

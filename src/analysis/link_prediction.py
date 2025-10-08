@@ -1,11 +1,15 @@
 import numpy as np
-from neo4j import GraphDatabase
 import random
 
 
 def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim: int = 128, node_label: str = "User"):
     """
     Generate GraphSAGE embeddings for nodes of a given type in the Neo4j graph.
+
+    This updated version will sanitize numeric feature properties (e.g. pagerank) by
+    setting NULL or NaN values to 0 before calling the GDS procedures. It also wraps
+    train/stream calls with try/except to provide clearer diagnostics when the GDS
+    procedures fail due to invalid feature values.
 
     Args:
         driver (neo4j.Driver): Neo4j driver instance.
@@ -21,22 +25,36 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
         embeddings = generate_graphsage_embeddings(driver, "myGraph", "UserSAGE", 128, node_label="User")
         user_emb = embeddings[user_id]
     """
-    # Scegli la property giusta in base al tipo di nodo
+    # Choose the appropriate feature property based on node type
     if node_label == "User":
         feature_properties = ["pagerank"]
     elif node_label == "Tweet":
         feature_properties = ["text_embedding"]
     else:
-        raise ValueError("node_label deve essere 'User' o 'Tweet'")
+        raise ValueError("node_label must be 'User' or 'Tweet'")
 
     with driver.session() as session:
+        # If using pagerank as a numeric feature, ensure no NULL or NaN values remain
+        if "pagerank" in feature_properties:
+            # Set NULL pagerank values to 0
+            try:
+                session.run("MATCH (u:User) WHERE u.pagerank IS NULL SET u.pagerank = 0 RETURN count(u) AS updated")
+            except Exception:
+                # ignore if permission or APOC not available; training will fail later if values invalid
+                pass
+            # Some NaN values may be stored; detect NaN by comparing value to itself (NaN != NaN)
+            try:
+                session.run("MATCH (u:User) WHERE u.pagerank <> u.pagerank SET u.pagerank = 0 RETURN count(u) AS fixed")
+            except Exception:
+                pass
+
         # Step 1: Train GraphSAGE model
-        # Elimina il modello se esiste già
+        # Drop model if it already exists (ignore failure)
         drop_query = f"CALL gds.beta.model.drop('{model_name}') YIELD modelName"
         try:
             session.run(drop_query)
         except Exception:
-            pass  # Ignora errori se il modello non esiste
+            pass
 
         train_query = f"""
         CALL gds.beta.graphSage.train('{graph_name}',
@@ -51,7 +69,11 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
         )
         YIELD modelInfo
         """
-        session.run(train_query, {"dim": dim})
+        try:
+            session.run(train_query, {"dim": dim}).consume()
+        except Exception as e:
+            # Re-raise with clearer context
+            raise RuntimeError(f"GraphSAGE training failed for model {model_name}: {e}") from e
 
         # Step 2: Generate embeddings
         embed_query = f"""
@@ -64,15 +86,17 @@ def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim:
         YIELD nodeId, embedding
         RETURN gds.util.asNode(nodeId).{node_label.lower()}_id AS node_id, embedding
         """
-        result = session.run(embed_query)
+        try:
+            result = session.run(embed_query)
+        except Exception as e:
+            raise RuntimeError(f"GraphSAGE streaming failed for model {model_name}: {e}") from e
 
         # Step 3: Convert embeddings to numpy arrays
-        import numpy as np
         embeddings = {}
         for record in result:
-            node_id = record["node_id"]
+            node_id = record.get("node_id")
             if node_id is not None:
-                emb_vector = np.array(record["embedding"], dtype=np.float32)
+                emb_vector = np.array(record.get("embedding"), dtype=np.float32)
                 embeddings[node_id] = emb_vector
 
         return embeddings

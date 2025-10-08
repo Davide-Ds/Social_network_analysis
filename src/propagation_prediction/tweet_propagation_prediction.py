@@ -15,6 +15,22 @@ from torch.utils.data import TensorDataset, DataLoader
 # 1. Create user graph for embeddings
 # =========================================
 def user_graph(driver, drop = False, graph_name="userGraph"):
+    """
+    Create or drop a GDS projected graph containing User nodes and RETWEETED_FROM relationships.
+
+    Args:
+        driver: Neo4j driver instance (authenticated session manager).
+        drop (bool): If True, attempt to drop an existing GDS graph with name graph_name.
+        graph_name (str): Name used to project the GDS graph.
+
+    Behavior:
+        - If drop is True, tries to drop an existing graph and prints the result.
+        - Otherwise projects a new graph using gds.graph.project over User nodes and RETWEETED_FROM relationships.
+
+    Notes:
+        - This function uses the Neo4j GDS plugin; ensure GDS is installed and available in the DB.
+        - The function prints summary info (graphName, nodeCount, relationshipCount).
+    """
     with driver.session() as session:
         if drop:
             # Drop the graph if it already exists
@@ -43,6 +59,26 @@ def user_graph(driver, drop = False, graph_name="userGraph"):
 # 2. Generate user embeddings with FastRP
 # =========================================
 def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph"):
+    """
+    Generate node embeddings using GDS FastRP and return a dict user_id -> numpy array embedding.
+
+    Args:
+        driver: Neo4j driver instance.
+        embedding_dim (int): Dimension of the FastRP embedding to compute.
+        graph_name (str): GDS graph name where FastRP will be executed.
+
+    Returns:
+        dict: Mapping from user_id (string) to L2-normalized numpy embedding vector.
+
+    Behavior:
+        - Calls gds.fastRP.mutate to write an 'embedding' node property.
+        - Streams node property values back and converts to numpy arrays.
+        - L2-normalizes each vector to improve numeric stability when using cosine-like comparisons.
+
+    Notes:
+        - If embedding vectors are stored in alternative keys, the function attempts multiple property names.
+        - Returned embeddings may be used directly for concatenation with text features.
+    """
     with driver.session() as session:
         # Step 1: generate embeddings with FastRP and store as a property
         mutate_query = f"""
@@ -86,6 +122,20 @@ def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph"):
 # 3. Load dataset (user, tweet, delay)
 # =========================================
 def load_training_data(driver, limit=200000):
+    """
+    Load training examples (user, tweet text, delay) from Neo4j.
+
+    Args:
+        driver: Neo4j driver instance.
+        limit (int): Maximum number of rows to fetch.
+
+    Returns:
+        pandas.DataFrame with columns ['user_id', 'text', 'delay'] where delay is numeric minutes.
+
+    Behavior:
+        - Executes a Cypher query matching (u)-[r:RETWEET]->(t) and returns user id, tweet text and retweet delay.
+        - Attempts to coerce delay column to numeric and returns the DataFrame.
+    """
     query = f"""
     MATCH (u:User)-[r:RETWEET]->(t:Tweet)
     WHERE t.text IS NOT NULL AND r.delay IS NOT NULL
@@ -105,6 +155,34 @@ def load_training_data(driver, limit=200000):
 # 4. Text preprocessing (TF-IDF + SVD) and feature build
 # =========================================
 def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, svd_components=128, negative_ratio=0.0, random_state=42):
+    """
+    Construct features and prepare datasets for the classifier and regressor.
+
+    Args:
+        data (pandas.DataFrame): DataFrame with columns ['user_id','text','delay'] (positives only).
+        user_embeddings (dict): Mapping user_id -> numpy embedding vector.
+        tfidf_max_features (int): max features for the TF-IDF vectorizer.
+        svd_components (int): number of SVD components to retain.
+        negative_ratio (float): ratio of negative samples to positive samples for classifier.
+        random_state (int): RNG seed for reproducibility.
+
+    Returns:
+        dict containing torch tensors for training/validation sets and fitted vectorizer/svd/scaler.
+        Keys include X_train_t, X_val_t, y_delay_train_t, y_delay_val_t and optionally
+        X_clf_train_t, X_clf_val_t, y_clf_train_t, y_clf_val_t when negative_ratio>0.
+
+    Processing steps:
+        - Filters rows missing embeddings, text, or delay.
+        - Computes log1p(delay) to stabilize heavy-tailed distribution.
+        - Builds TF-IDF matrix from tweet text and reduces dimensionality with TruncatedSVD.
+        - Standardizes text components, normalizes user embeddings, concatenates features.
+        - If negative_ratio>0, performs negative sampling to create classifier dataset.
+        - Splits data into train/val for regressor and classifier (if present).
+
+    Notes:
+        - The classifier negatives are sampled from users that did not retweet the corresponding tweet.
+        - Returned tensors are ready to be wrapped into DataLoader for minibatch training.
+    """
     # ensure user ids are strings and filter rows lacking embeddings
     data = data.copy()
     data['user_id'] = data['user_id'].astype(str)
@@ -190,6 +268,17 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
 # 5. Model definition (regression on log1p(delay))
 # =========================================
 class PropagationModel(nn.Module):
+    """
+    Regression model predicting log1p(delay) for a user-tweet pair.
+
+    Architecture:
+        - Fully connected: input_dim -> hidden_dim -> 128 -> 1
+        - ReLU activations
+
+    Usage:
+        - Input: torch tensor of shape (batch_size, input_dim) containing concatenated user and text features.
+        - Output: single continuous value per example representing predicted log1p(delay).
+    """
     def __init__(self, input_dim, hidden_dim=256):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
@@ -206,6 +295,16 @@ class PropagationModel(nn.Module):
 
 # Classifier model
 class ClassifierModel(nn.Module):
+    """
+    Binary classifier for retweet probability of a user on a given tweet.
+
+    Architecture:
+        - Fully connected network with two hidden layers and a final sigmoid output.
+
+    Usage:
+        - Input: concatenated features (user embedding + tweet text embedding).
+        - Output: probability in [0,1] (retweet likelihood).
+    """
     def __init__(self, input_dim, hidden_dim=256):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
@@ -224,6 +323,24 @@ class ClassifierModel(nn.Module):
 # 6. Training and validation (MSE on log1p delay)
 # =========================================
 def train_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
+    """
+    Train the regression model using minibatches and SmoothL1 (Huber) loss.
+
+    Args:
+        model (nn.Module): regression model instance (PropagationModel).
+        tensors (dict): dataset tensors as returned by build_features_and_dataset.
+        epochs (int): maximum number of epochs.
+        lr (float): learning rate for optimizer.
+        batch_size (int): minibatch size.
+        patience (int): early stopping patience based on validation loss.
+
+    Returns:
+        Trained model (best validation weights restored if early stopped).
+
+    Notes:
+        - Uses Adam optimizer and SmoothL1Loss for robustness to outliers.
+        - Prints per-epoch train/validation loss prefixed with [REGRESSOR].
+    """
     # Use SmoothL1 (Huber) for robustness to outliers and minibatch training
     criterion = nn.SmoothL1Loss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -279,6 +396,20 @@ def train_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
 
 # train classifier
 def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
+    """
+    Train the binary classifier using minibatches and BCE loss.
+
+    Args:
+        model (nn.Module): classifier instance (ClassifierModel).
+        tensors (dict): dataset tensors including X_clf_train_t, y_clf_train_t, etc.
+        epochs, lr, batch_size, patience: training hyperparameters.
+
+    Returns:
+        Trained classifier model (best validation state restored if early stopped).
+
+    Prints:
+        - Per-epoch training loss, validation loss and validation AUC (or 'n/a' if not computable).
+    """
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -333,6 +464,21 @@ def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patienc
 # 7. Final evaluation
 # =========================================
 def evaluate_model(model, tensors, batch_size=512):
+    """
+    Evaluate the regression model on the validation set and return metrics on the original minutes scale.
+
+    Args:
+        model (nn.Module): trained regression model that outputs log1p(delay).
+        tensors (dict): dataset tensors produced by build_features_and_dataset.
+        batch_size (int): evaluation batch size.
+
+    Returns:
+        dict with keys: mse, r2, mae, medae — all computed on original delay scale (minutes).
+
+    Notes:
+        - Inverse transform is applied using expm1 to map predictions back to minutes.
+        - MSE is sensitive to large outliers; median absolute error (medae) is more robust.
+    """
     model.eval()
     val_ds = TensorDataset(tensors["X_val_t"], tensors["y_delay_val_t"])
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
@@ -362,6 +508,24 @@ def evaluate_model(model, tensors, batch_size=512):
 # 8. Global prediction function (predict delay in minutes)
 # =========================================
 def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, top_k=5):
+    """
+    Predict top-k users likely to retweet soon for a given tweet.
+
+    Args:
+        model_reg: trained regression model (predicts log1p delay).
+        user_embeddings: dict user_id->embedding.
+        tweet_text: raw tweet text to vectorize.
+        vectorizer/svd/scaler_text: fitted text preprocessing objects.
+        model_clf (optional): trained classifier to pre-select high-probability users.
+        top_k (int): number of users to return.
+
+    Returns:
+        dict containing "top_users": list of tuples (user_id, prob_or_None, predicted_delay_minutes).
+
+    Behavior:
+        - If classifier provided, compute probabilities over all users, take top candidates and rank by prob then delay.
+        - Otherwise use regressor over all users and return smallest predicted delays.
+    """
     t_vec = vectorizer.transform([tweet_text])
     t_vec = svd.transform(t_vec)[0]
     t_vec = scaler_text.transform(t_vec.reshape(1, -1))[0]
@@ -405,10 +569,18 @@ def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorize
 # Predict expected number of retweets for a given tweet
 def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, cutoff_minutes=1440):
     """
-    Estimate expected number of users who will retweet tweet_text.
-    - If model_clf is provided, sum predicted probabilities across all users (expected value).
-    - Otherwise use regressor model_reg as fallback: count users with predicted delay <= cutoff_minutes.
-    Returns a dict with expected count and optional details.
+    Estimate expected number of retweets for a tweet.
+
+    Strategy:
+        - If classifier available: sum predicted probabilities across users (expected value of retweet count).
+        - Otherwise: use the regressor to predict delays and count users whose predicted delay <= cutoff_minutes.
+
+    Returns:
+        dict with either {'expected_retweets': float} or {'predicted_retweeters_count': int, 'cutoff_minutes': int}.
+
+    Notes:
+        - When summing probabilities, consider calibrating classifier probabilities for better absolute counts.
+        - The cutoff-based fallback is a crude heuristic and depends on chosen cutoff_minutes.
     """
     t_vec = vectorizer.transform([tweet_text])
     t_vec = svd.transform(t_vec)[0]
@@ -441,7 +613,28 @@ def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer
 # 9. Usage example
 # =========================================
 def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0):
+    """
+    High-level pipeline wrapping the whole propagation prediction flow.
 
+    Steps performed:
+        1. Create/load user graph and generate user embeddings (FastRP).
+        2. Load a dataset of (user, tweet text, delay) examples from Neo4j.
+        3. Build features for classifier/regressor (TF-IDF + SVD for text, normalized user embeddings).
+        4. Optionally train a binary classifier with negative sampling to predict retweet probability.
+        5. Train a regression model on positive examples to predict log1p(delay).
+        6. Evaluate regressor and compute expected retweet counts and top-k user predictions.
+
+    Args:
+        driver: Neo4j driver.
+        tweet_text: example tweet text to run final predictions on.
+        limit: maximum rows to fetch from DB.
+        embedding_dim, svd_components, tfidf_max_features: feature/model hyperparameters.
+        epochs, batch_size: training hyperparameters.
+        negative_ratio: number of negative samples (per positive) for classifier.
+
+    Returns:
+        None; prints progress, metrics and top-k predictions. Close DB connection on exit.
+    """
     # graph + embeddings
     user_graph(driver)
     user_embeddings = generate_user_embeddings(driver, embedding_dim=embedding_dim)

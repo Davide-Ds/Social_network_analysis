@@ -1,21 +1,21 @@
 import sys  
-from .data_processing.empty_db import Neo4jCleaner
-from .analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
-from .utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
-from .data_processing.import_data import (
+from data_processing.empty_db import Neo4jCleaner
+from analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
+from utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
+from data_processing.import_data import (
     load_tweets_and_labels,
     process_tree_files,
     import_tweet_nodes,
     import_retweets,
 )
-from .analysis.graph_analysis import *
-from .clustering.community_detection import *  # Import the missing function
-from .propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
+from analysis.graph_analysis import *
+from clustering.community_detection import *  # Import the missing function
+from propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
 import os
-from .logs.log_writer import setup_logging
-from .analysis.fractal_analysis import calculate_fractal_dimension
-from .analysis.moebius_analysis import MoebiusAnalyzer
-from .classification.tweet_classifier import train_and_evaluate  # ML classification function
+from logs.log_writer import setup_logging
+from analysis.fractal_analysis import calculate_fractal_dimension
+from analysis.moebius_analysis import MoebiusAnalyzer
+from classification.tweet_classifier import train_and_evaluate  # ML classification function
 from sklearn.model_selection import StratifiedKFold, cross_validate
 # Initialize logging (default folder: utils)
 
@@ -121,7 +121,18 @@ def main(mode):
         top_users = compute_pagerank(driver, 10)
         print("Top influential users (PageRank):")
         for user in top_users:
-            print(f"User: {user['user']}, Score: {user['score']:.2f}")
+            # Defensive access: some results may miss 'score' or use a different user id key
+            score = user.get('score') if isinstance(user, dict) else None
+            uid = None
+            if isinstance(user, dict):
+                uid = user.get('user') or user.get('user_id') or user.get('userId')
+            if uid is None:
+                uid = 'unknown'
+            # Format score safely
+            if isinstance(score, (int, float)):
+                print(f"User: {uid}, Score: {score:.2f}")
+            else:
+                print(f"User: {uid}, Score: N/A")
             
         # Analyze top fake news creators
         print("\nAnalyzing top fake news creators...")
@@ -129,7 +140,12 @@ def main(mode):
         print("Top influential fake news creators:")
         for creator in top_fake_news_creators:
             print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
-        
+    
+    
+    # ----------------------------
+    # MODE 3: Link prediction
+    # ----------------------------
+    if mode == 3:    
         # Link Prediction using GraphSAGE embeddings
         """
         Link Prediction Example using GraphSAGE Embeddings.
@@ -145,8 +161,9 @@ def main(mode):
         - numpy
         - scikit-learn
         """
+        print("\nRunning Link Prediction using GraphSAGE embeddings...")
         print("Computing embeddings for tweets using all-MiniLM-L6-v2 model if not already present...") 
-        if(not driver.session().run("MATCH (t:Tweet) WHERE exists(t.text_embedding) RETURN t LIMIT 1").single()):
+        if(not driver.session().run("MATCH (t:Tweet) WHERE t.text_embedding IS NOT NULL RETURN t LIMIT 1").single()):
             compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
         print("Creating complete GDS graph with User and Tweet nodes...")
         create_complete_gds_graph(driver)
@@ -156,9 +173,9 @@ def main(mode):
         # ---------------------------
         # Generate embeddings for User nodes
         print("\nGenerating GraphSAGE embeddings for Users...")
-        if (driver.session().run("CALL gds.model.exists('UserSAGE') YIELD exists RETURN exists").single().value()):
-            driver.session().run("CALL gds.model.drop('UserSAGE')"
-        )        
+        user_sage_result = driver.session().run("CALL gds.model.exists('UserSAGE') YIELD exists RETURN exists").single()
+        if user_sage_result is not None and user_sage_result.value():
+            driver.session().run("CALL gds.model.drop('UserSAGE')")
         user_embeddings = generate_graphsage_embeddings(
             driver,       # Neo4j driver instance
             graph_name="fullGraph",
@@ -168,9 +185,9 @@ def main(mode):
         )
             
         print("\nGenerating GraphSAGE embeddings for Tweets...")
-        if (driver.session().run("CALL gds.model.exists('TweetSAGE') YIELD exists RETURN exists").single().value()):
-            driver.session().run("CALL gds.model.drop('TweetSAGE')"
-            )
+        tweet_sage_result = driver.session().run("CALL gds.model.exists('TweetSAGE') YIELD exists RETURN exists").single()
+        if tweet_sage_result is not None and tweet_sage_result.value():
+            driver.session().run("CALL gds.model.drop('TweetSAGE')")
         tweet_embeddings = generate_graphsage_embeddings(
             driver,
             graph_name="fullGraph",
@@ -266,16 +283,16 @@ def main(mode):
         
         
     # ----------------------------
-    # MODE 3: ML text classification
+    # MODE 4: ML text classification
     # ----------------------------
-    if mode == 3:
+    if mode == 4:
         print("\nRunning ML text classification on tweets...")
         train_and_evaluate(path_source_tweets, path_labels)
     
     # ----------------------------
-    # MODE 4: ML community detection
+    # MODE 5: ML community detection
     # ----------------------------
-    if mode == 4:
+    if mode == 5:
         print("\nRunning community detection using Leiden algorithm...")
         df_users = leiden_user_communities(driver)
         print(df_users.head())   # Print first few rows of the DataFrame
@@ -290,9 +307,9 @@ def main(mode):
         print(df_anlysis.head())
     
     # ----------------------------
-    # MODE 5: Tweet propagation prediction with Neural Networks
+    # MODE 6: Tweet propagation prediction with Neural Networks
     # ----------------------------
-    if mode == 5:
+    if mode == 6:
         print("\nRunning tweet propagation prediction with Neural Networks...")
         tweet = "Elon musk went to Mars on his tesla cybertruck"
         tweet_propagation_prediction_NN(driver, tweet)
@@ -315,13 +332,13 @@ if __name__ == '__main__':
         3: Both load and analyze
         4: ML text classification
     """
-    print("Modes: 1 = Load data, 2 = Analysis, 3 = ML classification, 4 = Clustering, 5 = Tweet propagation prediction, 0 = Exit")
+    print("Modes: 1 = Load data, 2 = Analysis, 3 = Link Prediction, 4 = ML classification, 5 = Clustering, 6 = Tweet propagation prediction, 0 = Exit")
     while True:
-        mode = input("Enter mode (1, 2, 3, 4, 5 or 0 to exit): ").strip()
+        mode = input("Enter mode (1, 2, 3, 4, 5, 6 or 0 to exit): ").strip()
         if mode == "0":
             print("Exiting program.")
             sys.exit(0)
-        if mode in {"1", "2", "3", "4", "5"}:
+        if mode in {"1", "2", "3", "4", "5", "6"}:
             main(int(mode))
             break
         else:
