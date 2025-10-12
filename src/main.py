@@ -312,7 +312,7 @@ def main(mode):
     if mode == 6:
         print("\nRunning tweet propagation prediction with Neural Networks...")
         tweet = "Elon musk went to Mars on his tesla cybertruck"
-        tweet_propagation_prediction_NN(driver, tweet)
+        tweet_propagation_prediction_NN(driver, tweet,classifier_cv_folds=5)
 
 
     # ----------------------------
@@ -332,7 +332,7 @@ if __name__ == '__main__':
         3: Both load and analyze
         4: ML text classification
     """
-    print("Modes: 1 = Load data, 2 = Analysis, 3 = Link Prediction, 4 = ML classification, 5 = Clustering, 6 = Tweet propagation prediction, 0 = Exit")
+    print(f"Modes:\n 1) Load data\n 2) Analysis\n 3) Link Prediction\n 4) Text classification\n 5) Clustering\n 6) Tweet propagation prediction\n 0) Exit")
     while True:
         mode = input("Enter mode (1, 2, 3, 4, 5, 6 or 0 to exit): ").strip()
         if mode == "0":

@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score, roc_auc_score
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.metrics import mean_squared_error, r2_score, roc_auc_score, accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler, normalize
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader
 # =========================================
 # 1. Create user graph for embeddings
 # =========================================
-def user_graph(driver, drop = False, graph_name="userGraph"):
+def user_graph(driver, drop = False, graph_name="userGraph_TweetPropagation"):
     """
     Create or drop a GDS projected graph containing User nodes and RETWEETED_FROM relationships.
 
@@ -35,7 +35,7 @@ def user_graph(driver, drop = False, graph_name="userGraph"):
         if drop:
             # Drop the graph if it already exists
             try:
-                session.run(f"CALL gds.graph.drop('userGraph') YIELD graphName;")
+                session.run(f"CALL gds.graph.drop('{graph_name}') YIELD graphName;")
                 print(f"Graph '{graph_name}' dropped.")
             except Exception:
                 print(f"No graph '{graph_name}' to drop.")
@@ -58,7 +58,7 @@ def user_graph(driver, drop = False, graph_name="userGraph"):
 # =========================================
 # 2. Generate user embeddings with FastRP
 # =========================================
-def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph"):
+def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph_TweetPropagation"):
     """
     Generate node embeddings using GDS FastRP and return a dict user_id -> numpy array embedding.
 
@@ -193,7 +193,7 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
 
     # delay is in minutes -> apply log1p transform to stabilize variance
     delays = data['delay'].astype(float).values
-    print("Delay stats (minutes):", "count=", len(delays), "min=", float(np.nanmin(delays)), "median=", float(np.nanmedian(delays)), "mean=", float(np.nanmean(delays)), "max=", float(np.nanmax(delays)))
+    print(f"Delay stats (minutes): count={len(delays)} min={np.nanmin(delays):.4f} median={np.nanmedian(delays):.4f} mean={np.nanmean(delays):.4f} max={np.nanmax(delays):.4f}")
     y_delay = np.log1p(delays)
 
     # text preprocessing: TF-IDF + SVD
@@ -236,6 +236,10 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
         X_clf = np.vstack([X, X_neg])
         y_clf = np.concatenate([np.ones(X.shape[0], dtype=np.float32), np.zeros(X_neg.shape[0], dtype=np.float32)])
 
+        # store full classifier dataset for stratified CV
+        X_clf_full = X_clf.copy()
+        y_clf_full = y_clf.copy()
+        
         X_clf_train, X_clf_val, y_clf_train, y_clf_val = train_test_split(X_clf, y_clf, test_size=0.2, random_state=random_state, stratify=y_clf)
 
         clf_tensors = {
@@ -244,6 +248,9 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
             'y_clf_train_t': torch.tensor(y_clf_train, dtype=torch.float32).unsqueeze(1),
             'y_clf_val_t': torch.tensor(y_clf_val, dtype=torch.float32).unsqueeze(1)
         }
+        # expose full arrays for CV
+        clf_tensors['X_clf_full'] = X_clf_full # type: ignore
+        clf_tensors['y_clf_full'] = y_clf_full # type: ignore
 
     # split for regression (only positives)
     X_train, X_val, y_train, y_val = train_test_split(
@@ -612,28 +619,11 @@ def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer
 # =========================================
 # 9. Usage example
 # =========================================
-def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0):
+def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0, classifier_cv_folds=0):
     """
     High-level pipeline wrapping the whole propagation prediction flow.
 
-    Steps performed:
-        1. Create/load user graph and generate user embeddings (FastRP).
-        2. Load a dataset of (user, tweet text, delay) examples from Neo4j.
-        3. Build features for classifier/regressor (TF-IDF + SVD for text, normalized user embeddings).
-        4. Optionally train a binary classifier with negative sampling to predict retweet probability.
-        5. Train a regression model on positive examples to predict log1p(delay).
-        6. Evaluate regressor and compute expected retweet counts and top-k user predictions.
-
-    Args:
-        driver: Neo4j driver.
-        tweet_text: example tweet text to run final predictions on.
-        limit: maximum rows to fetch from DB.
-        embedding_dim, svd_components, tfidf_max_features: feature/model hyperparameters.
-        epochs, batch_size: training hyperparameters.
-        negative_ratio: number of negative samples (per positive) for classifier.
-
-    Returns:
-        None; prints progress, metrics and top-k predictions. Close DB connection on exit.
+    If classifier_cv_folds>1, performs stratified K-fold CV for the classifier before training the final classifier on the whole classifier dataset.
     """
     # graph + embeddings
     user_graph(driver)
@@ -645,11 +635,14 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
     data = tensors['filtered_data']
     print(f"Loaded dataset: {len(data)} positive examples")
 
-    # baseline (median) on original scale
-    delays = data['delay'].astype(float).values
-    median_delay = np.median(delays)
-    baseline_mse = mean_squared_error(delays, np.full_like(delays, median_delay))
-    print(f"Baseline median delay: {median_delay:.2f} minutes, baseline MSE: {baseline_mse:.2f}")
+    # classifier CV if requested
+    clf = None
+    if negative_ratio > 0.0 and classifier_cv_folds and classifier_cv_folds > 1:
+        print(f"Running stratified {classifier_cv_folds}-fold CV for classifier...")
+        cv_res = stratified_kfold_cv_classifier(tensors, n_splits=classifier_cv_folds, epochs=epochs, batch_size=batch_size, lr=1e-3, patience=5)
+        # format summary numeric values to 4 decimal places
+        fmt_summary = {k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in cv_res['summary'].items()}
+        print("Classifier CV summary:", fmt_summary)
 
     # train classifier
     if negative_ratio > 0.0:
@@ -666,12 +659,13 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
 
     metrics = evaluate_model(reg, tensors)
     print("\n=== Final evaluation (regressor) ===")
-    print(metrics)
+    # print metrics with 4 decimal places
+    print(f"MSE: {metrics['mse']:.4f}, R2: {metrics['r2']:.4f}, MAE: {metrics['mae']:.4f}, MedAE: {metrics['medae']:.4f}")
 
     # compute expected retweets using classifier (if available) or regressor fallback
     expected = predict_expected_retweets(reg, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf)
     if "expected_retweets" in expected:
-        print(f"Estimated expected retweets (sum of probabilities): {expected['expected_retweets']:.1f}")
+        print(f"Estimated expected retweets (sum of probabilities): {expected['expected_retweets']:.4f}")
     else:
         print(f"Estimated number of retweeters within {expected.get('cutoff_minutes', 1440)} minutes: {expected.get('predicted_retweeters_count')}")
 
@@ -680,7 +674,94 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
     print("\n=== Global prediction ===")
     print(f"Top users predicted to retweet soon (user_id, prob, predicted_delay_minutes):")
     for u, p, d in res["top_users"]:
-        print(f" - User {u}: prob={p:.3f}, predicted delay={d:.2f} minutes")
+        p_str = f"{p:.4f}" if p is not None else "n/a"
+        print(f" - User {u}: prob={p_str}, predicted delay={d:.4f} minutes")
     
     user_graph(driver, drop=True)
     driver.close()
+
+def stratified_kfold_cv_classifier(tensors, n_splits=5, epochs=10, batch_size=256, lr=1e-3, patience=5, random_state=42):
+    """
+    Perform stratified K-Fold CV for the classifier only.
+
+    Args:
+        tensors: output from build_features_and_dataset containing 'X_clf_full' and 'y_clf_full'.
+        n_splits: number of folds.
+        epochs, batch_size, lr, patience: training hyperparameters.
+
+    Returns:
+        dict with per-fold AUC scores and summary (mean/std).
+    """
+    X_full = tensors.get('X_clf_full')
+    y_full = tensors.get('y_clf_full')
+    if X_full is None or y_full is None:
+        raise RuntimeError('Classifier full dataset not available for stratified CV. Run build_features_and_dataset with negative_ratio>0.')
+
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    fold_metrics = []
+
+    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X_full, y_full)):
+        print(f"[CV-CLASSIFIER] Fold {fold_idx+1}/{n_splits}")
+        X_train, X_val = X_full[train_idx], X_full[val_idx]
+        y_train, y_val = y_full[train_idx], y_full[val_idx]
+
+        fold_tensors = {
+            'X_clf_train_t': torch.tensor(X_train, dtype=torch.float32),
+            'X_clf_val_t': torch.tensor(X_val, dtype=torch.float32),
+            'y_clf_train_t': torch.tensor(y_train, dtype=torch.float32).unsqueeze(1),
+            'y_clf_val_t': torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
+        }
+
+        input_dim = X_train.shape[1]
+        clf = ClassifierModel(input_dim)
+        # train on this fold
+        clf = train_classifier(clf, fold_tensors, epochs=epochs, batch_size=batch_size, lr=lr, patience=patience)
+
+        # evaluate AUC on val set
+        clf.eval()
+        probs = []
+        trues = []
+        val_ds = TensorDataset(fold_tensors['X_clf_val_t'], fold_tensors['y_clf_val_t'])
+        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                p = clf(xb).numpy().ravel()
+                probs.append(p)
+                trues.append(yb.numpy().ravel())
+        probs = np.concatenate(probs)
+        trues = np.concatenate(trues)
+        auc = float(roc_auc_score(trues, probs)) if trues.size and len(np.unique(trues))>1 else None
+        # binary predictions at 0.5 threshold
+        preds = (probs >= 0.5).astype(int)
+        trues_int = trues.astype(int)
+        accuracy = accuracy_score(trues_int, preds)
+        precision = precision_score(trues_int, preds, zero_division=0)
+        recall = recall_score(trues_int, preds, zero_division=0)
+        f1 = f1_score(trues_int, preds, zero_division=0)
+        auc_str = f"{auc:.4f}" if auc is not None else 'n/a'
+        print(f"[CV-CLASSIFIER] Fold {fold_idx+1} - AUC: {auc_str}, Acc: {accuracy:.4f}, Prec: {precision:.4f}, Rec: {recall:.4f}, F1: {f1:.4f}")
+        fold_metrics.append({
+            'auc': auc,
+            'accuracy': float(accuracy),
+            'precision': float(precision),
+            'recall': float(recall),
+            'f1': float(f1)
+        })
+
+    # summarize metrics across folds
+    summary = {}
+    if fold_metrics:
+        for metric in ['auc', 'accuracy', 'precision', 'recall', 'f1']:
+            vals = np.array([fm[metric] for fm in fold_metrics if fm[metric] is not None], dtype=float) if any(fm[metric] is not None for fm in fold_metrics) else np.array([])
+            if vals.size:
+                summary[f'{metric}_mean'] = float(vals.mean())
+                summary[f'{metric}_std'] = float(vals.std())
+            else:
+                summary[f'{metric}_mean'] = None
+                summary[f'{metric}_std'] = None
+    else:
+        for metric in ['auc', 'accuracy', 'precision', 'recall', 'f1']:
+            summary[f'{metric}_mean'] = None
+            summary[f'{metric}_std'] = None
+
+    return {'fold_metrics': fold_metrics, 'summary': summary}
