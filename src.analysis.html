@@ -303,7 +303,7 @@ float: if sample_size = 0, estimate of the fractal dimension of the entire netwo
 
 <dl class="py function">
 <dt class="sig sig-object py" id="src.analysis.graph_analysis.compute_pagerank">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">compute_pagerank</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#compute_pagerank"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.compute_pagerank" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">compute_pagerank</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'userGraph_4analysis'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#compute_pagerank"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.compute_pagerank" title="Link to this definition">¶</a></dt>
 <dd><p>Calculates the PageRank of users, saves it as the ‘pagerank’ property in User nodes,
 and returns the top_n most influential users.</p>
 <dl class="field-list simple">
@@ -311,6 +311,7 @@ and returns the top_n most influential users.</p>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>driver</strong> – Neo4j driver.</p></li>
 <li><p><strong>top_n</strong> – number of top users to return.</p></li>
+<li><p><strong>graph_name</strong> – name of the GDS graph to use for PageRank.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -321,38 +322,37 @@ and returns the top_n most influential users.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="src.analysis.graph_analysis.create_User_gds_graph">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">create_User_gds_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#create_User_gds_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.create_User_gds_graph" title="Link to this definition">¶</a></dt>
-<dd><p>Creates a GDS (Graph Data Science) graph called ‘myGraph’ if it
-doesn’t already exist.
-Natural orientation uses the direction in the db, better for PageRank.</p>
-<p>The graph includes:</p>
-<blockquote>
-<div><ul class="simple">
-<li><p>User nodes</p></li>
-<li><p>Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION</p></li>
-</ul>
-</div></blockquote>
+<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">create_User_gds_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'userGraph_4analysis'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#create_User_gds_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.create_User_gds_graph" title="Link to this definition">¶</a></dt>
+<dd><p>Creates a GDS (Graph Data Science) graph named by graph_name if it
+doesn’t already exist. Natural orientation uses the direction in the db,
+better for PageRank.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>driver</strong> – Neo4j driver.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>driver</strong> – Neo4j driver.</p></li>
+<li><p><strong>graph_name</strong> (<em>str</em>) – name to use for the projected GDS graph.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="src.analysis.graph_analysis.create_complete_gds_graph">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">create_complete_gds_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#create_complete_gds_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.create_complete_gds_graph" title="Link to this definition">¶</a></dt>
-<dd><p>Creates a complete GDS graph ‘fullGraph’ with:</p>
-<blockquote>
-<div><ul class="simple">
+<span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">create_complete_gds_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fullGraph_analysis'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#create_complete_gds_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.create_complete_gds_graph" title="Link to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Creates a complete GDS graph with the given name containing:</dt><dd><ul class="simple">
 <li><p>User nodes (property: pagerank)</p></li>
 <li><p>Tweet nodes (property: text_embedding)</p></li>
 <li><p>Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION.</p></li>
 </ul>
-</div></blockquote>
+</dd>
+</dl>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>driver</strong> – Neo4j driver.</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>driver</strong> – Neo4j driver.</p></li>
+<li><p><strong>graph_name</strong> – name for the projected full graph (default ‘fullGraph’).</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>

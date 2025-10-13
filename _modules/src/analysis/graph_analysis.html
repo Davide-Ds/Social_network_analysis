@@ -404,24 +404,21 @@
 
 <div class="viewcode-block" id="create_User_gds_graph">
 <a class="viewcode-back" href="../../../src.analysis.html#src.analysis.graph_analysis.create_User_gds_graph">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">create_User_gds_graph</span><span class="p">(</span><span class="n">driver</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_User_gds_graph</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">graph_name</span><span class="o">=</span><span class="s2">&quot;userGraph_4analysis&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Creates a GDS (Graph Data Science) graph called &#39;myGraph&#39; if it </span>
-<span class="sd">    doesn&#39;t already exist. </span>
-<span class="sd">    Natural orientation uses the direction in the db, better for PageRank.</span>
-<span class="sd">    </span>
-<span class="sd">    The graph includes:</span>
-<span class="sd">    </span>
-<span class="sd">      - User nodes</span>
-<span class="sd">      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION</span>
-<span class="sd">    </span>
+<span class="sd">    Creates a GDS (Graph Data Science) graph named by graph_name if it</span>
+<span class="sd">    doesn&#39;t already exist. Natural orientation uses the direction in the db,</span>
+<span class="sd">    better for PageRank.</span>
+
 <span class="sd">    Args:</span>
 <span class="sd">        driver: Neo4j driver.</span>
+<span class="sd">        graph_name (str): name to use for the projected GDS graph.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">query_check</span> <span class="o">=</span> <span class="s2">&quot;CALL gds.graph.exists(&#39;myGraph&#39;) YIELD exists&quot;</span>
-    <span class="n">query_create</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    CALL gds.graph.project(</span>
-<span class="s2">        &#39;userGraph&#39;,</span>
+    <span class="n">query_check</span> <span class="o">=</span> <span class="s2">&quot;CALL gds.graph.exists(&#39;</span><span class="si">%s</span><span class="s2">&#39;) YIELD exists&quot;</span> <span class="o">%</span> <span class="n">graph_name</span>
+    <span class="n">query_create</span> <span class="o">=</span> <span class="p">(</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    CALL gds.graph.project(</span>
+<span class="sd">        &#39;&quot;&quot;&quot;</span> <span class="o">+</span> <span class="n">graph_name</span> <span class="o">+</span> <span class="s2">&quot;&quot;&quot;&#39;,</span>
 <span class="s2">        {</span>
 <span class="s2">            User: {</span>
 <span class="s2">                label: &#39;User&#39;</span>
@@ -451,31 +448,36 @@
 <span class="s2">        }</span>
 <span class="s2">    )</span>
 <span class="s2">    &quot;&quot;&quot;</span>
+    <span class="p">)</span>
     <span class="k">with</span> <span class="n">driver</span><span class="o">.</span><span class="n">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="c1"># Check if the graph already exists</span>
-        <span class="n">exists</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query_check</span><span class="p">)</span><span class="o">.</span><span class="n">single</span><span class="p">()[</span><span class="s1">&#39;exists&#39;</span><span class="p">]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query_check</span><span class="p">)</span>
+        <span class="n">record</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">single</span><span class="p">()</span>
+        <span class="n">exists</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s1">&#39;exists&#39;</span><span class="p">])</span> <span class="k">if</span> <span class="n">record</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s1">&#39;exists&#39;</span> <span class="ow">in</span> <span class="n">record</span> <span class="k">else</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
             <span class="c1"># Create the GDS graph only if it doesn&#39;t exist</span>
             <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query_create</span><span class="p">)</span></div>
 
 
+
 <div class="viewcode-block" id="create_complete_gds_graph">
 <a class="viewcode-back" href="../../../src.analysis.html#src.analysis.graph_analysis.create_complete_gds_graph">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">create_complete_gds_graph</span><span class="p">(</span><span class="n">driver</span><span class="p">):</span>    
+<span class="k">def</span><span class="w"> </span><span class="nf">create_complete_gds_graph</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">graph_name</span><span class="o">=</span><span class="s1">&#39;fullGraph_analysis&#39;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Creates a complete GDS graph &#39;fullGraph&#39; with:</span>
-<span class="sd">    </span>
+<span class="sd">    Creates a complete GDS graph with the given name containing:</span>
 <span class="sd">      - User nodes (property: pagerank)</span>
 <span class="sd">      - Tweet nodes (property: text_embedding)</span>
 <span class="sd">      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION.</span>
-<span class="sd">    </span>
+
 <span class="sd">    Args:</span>
-<span class="sd">        driver: Neo4j driver. </span>
+<span class="sd">        driver: Neo4j driver.</span>
+<span class="sd">        graph_name: name for the projected full graph (default &#39;fullGraph&#39;).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">query_drop</span> <span class="o">=</span> <span class="s2">&quot;CALL gds.graph.drop(&#39;fullGraph&#39;, false) YIELD graphName&quot;</span>
-    <span class="n">query_create</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    CALL gds.graph.project(</span>
-<span class="s2">        &#39;fullGraph&#39;,</span>
+    <span class="n">query_drop</span> <span class="o">=</span> <span class="s2">&quot;CALL gds.graph.drop(&#39;</span><span class="si">%s</span><span class="s2">&#39;, false) YIELD graphName&quot;</span> <span class="o">%</span> <span class="n">graph_name</span>
+    <span class="n">query_create</span> <span class="o">=</span> <span class="p">(</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    CALL gds.graph.project(</span>
+<span class="sd">        &#39;&quot;&quot;&quot;</span> <span class="o">+</span> <span class="n">graph_name</span> <span class="o">+</span> <span class="s2">&quot;&quot;&quot;&#39;,</span>
 <span class="s2">        {</span>
 <span class="s2">            User: {</span>
 <span class="s2">                properties: [&#39;pagerank&#39;]</span>
@@ -493,34 +495,34 @@
 <span class="s2">        }</span>
 <span class="s2">    )</span>
 <span class="s2">    &quot;&quot;&quot;</span>
+    <span class="p">)</span>
     <span class="k">with</span> <span class="n">driver</span><span class="o">.</span><span class="n">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query_drop</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="k">pass</span>
         <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query_create</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GDS graph &#39;fullGraph&#39; created with User (pagerank) and Tweet (text_embedding).&quot;</span><span class="p">)</span></div>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GDS graph &#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39; created with User (pagerank) and Tweet (text_embedding).&quot;</span><span class="p">)</span></div>
 
     
+
 <div class="viewcode-block" id="compute_pagerank">
 <a class="viewcode-back" href="../../../src.analysis.html#src.analysis.graph_analysis.compute_pagerank">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute_pagerank</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">top_n</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_pagerank</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">top_n</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">graph_name</span><span class="o">=</span><span class="s1">&#39;userGraph_4analysis&#39;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Calculates the PageRank of users, saves it as the &#39;pagerank&#39; property in User nodes,</span>
 <span class="sd">    and returns the top_n most influential users.</span>
-<span class="sd">    </span>
+
 <span class="sd">    Args:</span>
 <span class="sd">        driver: Neo4j driver.</span>
 <span class="sd">        top_n: number of top users to return.</span>
-<span class="sd">    </span>
+<span class="sd">        graph_name: name of the GDS graph to use for PageRank.</span>
+
 <span class="sd">    Returns:</span>
 <span class="sd">        List of dicts with user_id and pagerank score.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Compute and write the PageRank in User nodes as property &#39;pagerank&#39;</span>
-    <span class="n">write_query</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    CALL gds.pageRank.write(&#39;userGraph&#39;, { writeProperty: &#39;pagerank&#39; })</span>
-<span class="s2">    YIELD nodePropertiesWritten, ranIterations</span>
-<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">write_query</span> <span class="o">=</span> <span class="s2">&quot;CALL gds.pageRank.write(&#39;</span><span class="si">%s</span><span class="s2">&#39;, { writeProperty: &#39;pagerank&#39; }) YIELD nodePropertiesWritten, ranIterations&quot;</span> <span class="o">%</span> <span class="n">graph_name</span>
     <span class="c1"># Retrieve the top_n users by PageRank</span>
     <span class="n">select_query</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
 <span class="s2">    MATCH (u:User)</span>
@@ -625,8 +627,7 @@
         <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">df</span></div>
 
-         
-        
+
 </pre></div>
         </article>
       </div>
