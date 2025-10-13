@@ -4,7 +4,7 @@ import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-def leiden_user_communities(driver, graph_name="userGraph"):
+def leiden_user_communities(driver, graph_name="userGraph_Clustering"):
     """
     Detects communities of users using the Leiden algorithm on a graph.
     

@@ -324,20 +324,31 @@ def main(mode):
 if __name__ == '__main__':
     """
     Program entry point.
-
     Prompts the user to select the mode:
         0: Exit
-        1: Load data
+        1: Load data from txt files to neo4j graph database
         2: Graph analysis
-        3: Both load and analyze
-        4: ML text classification
+        3: Link Prediction
+        4: Tweet's text classification
+        5: Users clustering with Laiden's community detection algorithm
+        6: Tweet propagation prediction with Neural Networks
+        7: All
     """
-    print(f"Modes:\n 1) Load data\n 2) Analysis\n 3) Link Prediction\n 4) Text classification\n 5) Clustering\n 6) Tweet propagation prediction\n 0) Exit")
+    print(f"Modes:\n 1) Load data\n 2) Graph Analysis\n 3) Link Prediction\n 4) Tweet text classification\n 5) Communities detection\n 6) Tweet propagation prediction\n 7) All\n 0) Exit")
     while True:
-        mode = input("Enter mode (1, 2, 3, 4, 5, 6 or 0 to exit): ").strip()
+        mode = input("Enter mode (1, 2, 3, 4, 5, 6, 7 or 0 to exit): ").strip()
         if mode == "0":
             print("Exiting program.")
             sys.exit(0)
+        if mode == "7":
+            print("Running all modes in sequence: 1..6")
+            for m in [1,2,3,4,5,6]:
+                try:
+                    main(m)
+                except Exception as e:
+                    print(f"Mode {m} raised an exception: {e}")
+            print("Completed all modes.")
+            break
         if mode in {"1", "2", "3", "4", "5", "6"}:
             main(int(mode))
             break

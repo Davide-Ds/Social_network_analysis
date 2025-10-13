@@ -151,24 +151,21 @@ def get_most_retweeted_tweet(driver):
         return record["tweet_id"] if record else None
 
 
-def create_User_gds_graph(driver):
+def create_User_gds_graph(driver, graph_name="userGraph_4analysis"):
     """
-    Creates a GDS (Graph Data Science) graph called 'myGraph' if it 
-    doesn't already exist. 
-    Natural orientation uses the direction in the db, better for PageRank.
-    
-    The graph includes:
-    
-      - User nodes
-      - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION
-    
+    Creates a GDS (Graph Data Science) graph named by graph_name if it
+    doesn't already exist. Natural orientation uses the direction in the db,
+    better for PageRank.
+
     Args:
         driver: Neo4j driver.
+        graph_name (str): name to use for the projected GDS graph.
     """
-    query_check = "CALL gds.graph.exists('myGraph') YIELD exists"
-    query_create = """
+    query_check = "CALL gds.graph.exists('%s') YIELD exists" % graph_name
+    query_create = (
+        """
     CALL gds.graph.project(
-        'userGraph',
+        '""" + graph_name + """',
         {
             User: {
                 label: 'User'
@@ -198,28 +195,33 @@ def create_User_gds_graph(driver):
         }
     )
     """
+    )
     with driver.session() as session:
         # Check if the graph already exists
-        exists = session.run(query_check).single()['exists']
+        result = session.run(query_check)
+        record = result.single()
+        exists = bool(record['exists']) if record is not None and 'exists' in record else False
         if not exists:
             # Create the GDS graph only if it doesn't exist
             session.run(query_create)
 
-def create_complete_gds_graph(driver):    
+
+def create_complete_gds_graph(driver, graph_name='fullGraph_analysis'):
     """
-    Creates a complete GDS graph 'fullGraph' with:
-    
+    Creates a complete GDS graph with the given name containing:
       - User nodes (property: pagerank)
       - Tweet nodes (property: text_embedding)
       - Relationships: CREATES, RETWEET, RETWEETED_FROM, QUOTE, INTERACTION.
-    
+
     Args:
-        driver: Neo4j driver. 
+        driver: Neo4j driver.
+        graph_name: name for the projected full graph (default 'fullGraph').
     """
-    query_drop = "CALL gds.graph.drop('fullGraph', false) YIELD graphName"
-    query_create = """
+    query_drop = "CALL gds.graph.drop('%s', false) YIELD graphName" % graph_name
+    query_create = (
+        """
     CALL gds.graph.project(
-        'fullGraph',
+        '""" + graph_name + """',
         {
             User: {
                 properties: ['pagerank']
@@ -237,31 +239,31 @@ def create_complete_gds_graph(driver):
         }
     )
     """
+    )
     with driver.session() as session:
         try:
             session.run(query_drop)
         except Exception:
             pass
         session.run(query_create)
-    print("GDS graph 'fullGraph' created with User (pagerank) and Tweet (text_embedding).")
+    print(f"GDS graph '{graph_name}' created with User (pagerank) and Tweet (text_embedding).")
     
-def compute_pagerank(driver, top_n=10):
+
+def compute_pagerank(driver, top_n=10, graph_name='userGraph_4analysis'):
     """
     Calculates the PageRank of users, saves it as the 'pagerank' property in User nodes,
     and returns the top_n most influential users.
-    
+
     Args:
         driver: Neo4j driver.
         top_n: number of top users to return.
-    
+        graph_name: name of the GDS graph to use for PageRank.
+
     Returns:
         List of dicts with user_id and pagerank score.
     """
     # Compute and write the PageRank in User nodes as property 'pagerank'
-    write_query = """
-    CALL gds.pageRank.write('userGraph', { writeProperty: 'pagerank' })
-    YIELD nodePropertiesWritten, ranIterations
-    """
+    write_query = "CALL gds.pageRank.write('%s', { writeProperty: 'pagerank' }) YIELD nodePropertiesWritten, ranIterations" % graph_name
     # Retrieve the top_n users by PageRank
     select_query = """
     MATCH (u:User)
@@ -359,5 +361,4 @@ def get_class_stats(driver):
         records = [dict(record) for record in result]
         df = pd.DataFrame(records)
         return df
-         
-        
+
