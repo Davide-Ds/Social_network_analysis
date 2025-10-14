@@ -1,4 +1,6 @@
-import sys  
+import sys
+import os
+import pandas as pd
 from data_processing.empty_db import Neo4jCleaner
 from analysis.link_prediction import build_link_prediction_dataset, generate_graphsage_embeddings
 from utils.neo4j_utils import create_indexes, get_neo4j_driver, compute_and_save_tweet_embeddings
@@ -11,12 +13,18 @@ from data_processing.import_data import (
 from analysis.graph_analysis import *
 from clustering.community_detection import *  # Import the missing function
 from propagation_prediction.tweet_propagation_prediction import tweet_propagation_prediction_NN
-import os
 from logs.log_writer import setup_logging
 from analysis.fractal_analysis import calculate_fractal_dimension
 from analysis.moebius_analysis import MoebiusAnalyzer
 from classification.tweet_classifier import train_and_evaluate  # ML classification function
 from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
+
+
+
+
 # Initialize logging (default folder: utils)
 
 
@@ -26,10 +34,14 @@ def main(mode):
     Main function to execute the social network analysis workflow.
 
     Depending on the mode, this function can:
-        1: Load tweets and retweet data into Neo4j
-        2: Perform graph analysis
-        3: Both load and analyze
-        4: Run ML text classification (tweet_classifier)
+        0: Exit
+        1: Load data from txt files to neo4j graph database
+        2: Graph analysis
+        3: Link Prediction
+        4: Tweet's text classification
+        5: Users clustering with Laiden's community detection algorithm
+        6: Tweet propagation prediction with Neural Networks
+        7: All
 
     Args:
         mode (int): Operation mode
@@ -85,7 +97,8 @@ def main(mode):
         print("\nRetrieving class statistics...")
         class_statistics = get_class_stats(driver)
         print(f"Class statistics:\n {class_statistics}\n")
-            # Identify most retweeted users
+
+        # Identify most retweeted users
         print("\nIdentifying most retweeted users...")
         most_retweeted = find_most_retweeted_users(driver)
         print(f"Users found: {most_retweeted}")
@@ -207,7 +220,6 @@ def main(mode):
         # ---------------------------
         # Step 3: Train-test split
         # ---------------------------
-        from sklearn.model_selection import train_test_split
         print("Splitting dataset into train and test sets...")
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
@@ -216,7 +228,6 @@ def main(mode):
         # ---------------------------
         # Step 4: Train classifier
         # ---------------------------
-        from sklearn.ensemble import RandomForestClassifier
         print("Training Random Forest classifier...")
         clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
         print(f"Training samples: {len(y_train)}, Test samples: {len(y_test)}")
@@ -227,8 +238,6 @@ def main(mode):
         # Step 5: Predict and evaluate
         # ---------------------------
         
-        from sklearn.metrics import f1_score, accuracy_score
-
         # Evaluation on training set
         y_train_pred = clf.predict(X_train)
         train_f1 = f1_score(y_train, y_train_pred)
@@ -244,9 +253,6 @@ def main(mode):
         print(f"Test set     - F1-score: {test_f1:.4f}, Accuracy: {test_acc:.4f}")
         print("Evaluating model...")
         y_pred = clf.predict(X_test)
-
-        import pandas as pd
-        from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
 
         # Compute metrics
         metrics = {
@@ -278,9 +284,7 @@ def main(mode):
             scores = results[f'test_{metric}']
             print(f"{metric.capitalize()} per fold: {scores}")
             print(f"{metric.capitalize()} medio: {scores.mean():.4f} (+/- {scores.std():.4f})")
-
-
-        
+     
         
     # ----------------------------
     # MODE 4: ML text classification
@@ -289,9 +293,9 @@ def main(mode):
         print("\nRunning ML text classification on tweets...")
         train_and_evaluate(path_source_tweets, path_labels)
     
-    # ----------------------------
+    # -------------------------------
     # MODE 5: ML community detection
-    # ----------------------------
+    # -------------------------------
     if mode == 5:
         print("\nRunning community detection using Leiden algorithm...")
         df_users = leiden_user_communities(driver)
@@ -311,7 +315,7 @@ def main(mode):
     # ----------------------------
     if mode == 6:
         print("\nRunning tweet propagation prediction with Neural Networks...")
-        tweet = "Elon musk went to Mars on his tesla cybertruck"
+        tweet = "Elon Musk went to Mars on his Tesla cybertruck"
         tweet_propagation_prediction_NN(driver, tweet,classifier_cv_folds=5)
 
 
