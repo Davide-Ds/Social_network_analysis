@@ -92,21 +92,21 @@ def main(mode):
         # Basic graph analysis
         print("\nRetrieving basic statistics...")
         stats = basic_statistics(driver)
-        print(f"Basic statistics: {stats}")
+        print(f"\nBasic statistics: {stats}")
 
         print("\nRetrieving class statistics...")
         class_statistics = get_class_stats(driver)
-        print(f"Class statistics:\n {class_statistics}\n")
+        print(f"\nClass statistics:\n {class_statistics}\n")
 
         # Identify most retweeted users
         print("\nIdentifying most retweeted users...")
         most_retweeted = find_most_retweeted_users(driver)
-        print(f"Users found: {most_retweeted}")
+        print(f"\nUsers found: {most_retweeted}")
 
         # Identify users who retweet the most
         print("\nIdentifying frequent retweeters...")
         frequent_retweeters = find_frequent_retwetters(driver)
-        print(f"Users found: {frequent_retweeters}")
+        print(f"\nUsers found: {frequent_retweeters}")
 
         # Analyze diffusion for the most retweeted tweet
         most_retweeted_tweet = get_most_retweeted_tweet(driver)
@@ -114,11 +114,17 @@ def main(mode):
         diffusion = analyze_diffusion_patterns(driver, most_retweeted_tweet)
         print(f"\nDiffusion for tweet {most_retweeted_tweet}:")
         for level in diffusion:
-            print(f"Tree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}, Users at level: {level['users_at_level']}\n")
+            print(f"\nTree Level: {level['hop_level']}, Count users at level: {level['num_users_at_level']}\n")
 
         # Calculate fractal dimension of the whole network, set the parameter sample_size > 0 too use a sample of random tweets instead
         print(f"\nCalculating fractal dimension")
-        calculate_fractal_dimension(driver, max_box_size= 5) 
+        res = calculate_fractal_dimension(
+            driver,
+            max_box_size=8,
+            generate_plots=True,
+            agg_method="median"
+        )
+        print(res)
 
         # Detect Möbius structures
         print("\nIdentifying Möbius structures in the social graph...")
@@ -132,7 +138,7 @@ def main(mode):
         print("\nComputing PageRank...")
         create_User_gds_graph(driver)
         top_users = compute_pagerank(driver, 10)
-        print("Top influential users (PageRank):")
+        print("\nTop influential users (PageRank):")
         for user in top_users:
             # Defensive access: some results may miss 'score' or use a different user id key
             score = user.get('score') if isinstance(user, dict) else None
@@ -143,16 +149,16 @@ def main(mode):
                 uid = 'unknown'
             # Format score safely
             if isinstance(score, (int, float)):
-                print(f"User: {uid}, Score: {score:.2f}")
+                print(f"\nUser: {uid}, Score: {score:.2f}")
             else:
-                print(f"User: {uid}, Score: N/A")
+                print(f"\nUser: {uid}, Score: N/A")
             
         # Analyze top fake news creators
         print("\nAnalyzing top fake news creators...")
         top_fake_news_creators = get_top_fake_news_creators(driver, 10)
-        print("Top influential fake news creators:")
+        print("\nTop influential fake news creators:")
         for creator in top_fake_news_creators:
-            print(f"User: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
+            print(f"\nUser: {creator['user_id']}, Total tweets: {creator['total_tweets']}, Fake News Count: {creator['num_fake_tweets']}, Fake tweets ids: {creator['fake_tweet_ids']}")
     
     
     # ----------------------------
@@ -214,13 +220,13 @@ def main(mode):
         # ---------------------------
         # Positive pairs: existing RETWEET relationships
         # Negative pairs: random User-Tweet pairs with no RETWEET
-        print("Building link prediction dataset...")
+        print("\nBuilding link prediction dataset...")
         X, y = build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings)
 
         # ---------------------------
         # Step 3: Train-test split
         # ---------------------------
-        print("Splitting dataset into train and test sets...")
+        print("\nSplitting dataset into train and test sets...")
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
@@ -228,10 +234,10 @@ def main(mode):
         # ---------------------------
         # Step 4: Train classifier
         # ---------------------------
-        print("Training Random Forest classifier...")
+        print("\nTraining Random Forest classifier...")
         clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-        print(f"Training samples: {len(y_train)}, Test samples: {len(y_test)}")
-        print("Fitting model...")
+        print(f"\nTraining samples: {len(y_train)}, Test samples: {len(y_test)}")
+        print("\nFitting model...")
         clf.fit(X_train, y_train)
 
         # ---------------------------
@@ -248,10 +254,10 @@ def main(mode):
         test_f1 = f1_score(y_test, y_test_pred)
         test_acc = accuracy_score(y_test, y_test_pred)
         
-        print("\nConfronto metriche:")
-        print(f"Training set - F1-score: {train_f1:.4f}, Accuracy: {train_acc:.4f}")
-        print(f"Test set     - F1-score: {test_f1:.4f}, Accuracy: {test_acc:.4f}")
-        print("Evaluating model...")
+        print("\nMetrics confrontation:")
+        print(f"\nTraining set - F1-score: {train_f1:.4f}, Accuracy: {train_acc:.4f}")
+        print(f"\nTest set     - F1-score: {test_f1:.4f}, Accuracy: {test_acc:.4f}")
+        print("\nEvaluating model...")
         y_pred = clf.predict(X_test)
 
         # Compute metrics
