@@ -181,3 +181,8 @@ artifacts/tfidf_vectorizer.joblib
 src/clustering/community_size_distribution.csv
 src/clustering/top_communities_analysis.csv
 src/clustering/users_by_cluster.csv
+artifacts/fractal_plots/print.pdf
+artifacts/fractal_plots/fractal_per_seed_samples.png
+artifacts/fractal_plots/fractal_D_histogram.png
+artifacts/fractal_plots/fractal_aggregated_nosat_loglog.png
+artifacts/fractal_plots/fractal_aggregated_loglog.png
