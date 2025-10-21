@@ -247,24 +247,83 @@
 </section>
 <section id="module-src.analysis.fractal_analysis">
 <span id="src-analysis-fractal-analysis-module"></span><h2>src.analysis.fractal_analysis module<a class="headerlink" href="#module-src.analysis.fractal_analysis" title="Link to this heading">¶</a></h2>
+<p>Fractal analysis utilities for social network coverage (box-counting, per-seed fits, aggregation).</p>
+<p>A fractal is a pattern that displays self-similarity across scales. In network analysis,
+a fractal (or scaling) exponent D can be estimated by measuring how the number of nodes
+covered within radius r, N(r), grows with r. The usual empirical relation is:</p>
+<blockquote>
+<div><p>N(r) ~ r^D   &lt;=&gt;   log N(r) ~ D * log r</p>
+</div></blockquote>
+<p>This module provides helpers to:
+- run per-seed BFS/coverage up to a maximum radius,
+- perform log-log fits per seed and on aggregated curves (median/mean),
+- compute a robust median-of-seeds estimator excluding saturated radii and poor fits,
+- generate diagnostic plots.</p>
+<p>The functions use a pragmatic approach intended for exploratory analysis; see the
+documentation comments in each function for usage details and returned keys.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="src.analysis.fractal_analysis.calculate_fractal_dimension">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.fractal_analysis.</span></span><span class="sig-name descname"><span class="pre">calculate_fractal_dimension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_box_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/fractal_analysis.html#calculate_fractal_dimension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.fractal_analysis.calculate_fractal_dimension" title="Link to this definition">¶</a></dt>
-<dd><p>Calculates the fractal dimension of the graph:
-:param driver: Neo4j connection.
-:param max_box_size: maximum distance for box-counting.
-:type max_box_size: int
-:param sample_size: number of random tweets to sample, if 0 computes on the whole network.
-:type sample_size: int</p>
+<span class="sig-prename descclassname"><span class="pre">src.analysis.fractal_analysis.</span></span><span class="sig-name descname"><span class="pre">calculate_fractal_dimension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_box_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'userGraph'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_start_nodes_for_full</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generate_plots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'artifacts/fractal_plots'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_seeds_for_plot</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">agg_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'median'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/src/analysis/fractal_analysis.html#calculate_fractal_dimension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.fractal_analysis.calculate_fractal_dimension" title="Link to this definition">¶</a></dt>
+<dd><p>Compute fractal (box-counting) dimension for a Neo4j graph projection.</p>
+<p>Two modes:
+- Sample mode: when sample_size &gt; 0 compute per-sample coverage (e.g. per tweet author).
+- Full mode: sample users (or use all if small) and compute per-seed BFS coverage up to max_box_size.</p>
+<p>The function aggregates per-seed coverages (median or mean) and fits an aggregated log-log
+curve. It also computes per-seed fits and returns summary statistics.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>if sample_size &gt; 0, returns a dictionary with tweet_id as key and fractal dimension as value;
-float: if sample_size = 0, estimate of the fractal dimension of the entire network.</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>driver</strong> – Neo4j driver object with .session() context manager.</p></li>
+<li><p><strong>max_box_size</strong> (<em>int</em>) – Maximum radius (box size) to query with BFS.</p></li>
+<li><p><strong>sample_size</strong> (<em>int</em>) – If &gt;0 run sample mode over tweets; otherwise run full network mode.</p></li>
+<li><p><strong>graph_name</strong> (<em>str</em>) – Name of the GDS graph projection used by gds.bfs.stream.</p></li>
+<li><p><strong>max_start_nodes_for_full</strong> (<em>int</em>) – Maximum number of start nodes to sample when analyzing the full network.</p></li>
+<li><p><strong>generate_plots</strong> (<em>bool</em>) – If True generate diagnostic plots (requires matplotlib).</p></li>
+<li><p><strong>plot_dir</strong> (<em>str</em>) – Destination directory for plots.</p></li>
+<li><p><strong>sample_seeds_for_plot</strong> (<em>int</em>) – Number of per-seed curves to sample when plotting per-seed coverage.</p></li>
+<li><p><strong>agg_method</strong> (<em>str</em>) – ‘median’ or ‘mean’ aggregation across seeds for the aggregated curve.</p></li>
+</ul>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>dict</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Result dictionary containing keys described in the module docstring,
+including aggregated D/r2, per-seed Ds, per-seed r2s, and optional ‘median_filtered’.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dict[str, Any]</p>
 </dd>
 </dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">res</span> <span class="o">=</span> <span class="n">calculate_fractal_dimension</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">max_box_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">generate_plots</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">agg_method</span><span class="o">=</span><span class="s1">&#39;median&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="src.analysis.fractal_analysis.fit_fractal_dimension">
+<span class="sig-prename descclassname"><span class="pre">src.analysis.fractal_analysis.</span></span><span class="sig-name descname"><span class="pre">fit_fractal_dimension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">box_sizes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">box_counts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_points</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/src/analysis/fractal_analysis.html#fit_fractal_dimension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.fractal_analysis.fit_fractal_dimension" title="Link to this definition">¶</a></dt>
+<dd><p>Estimate fractal dimension D and coefficient of determination R^2 from box-counting data.</p>
+<p>Performs a linear regression on (log(box_size), log(box_count)). Uses numpy.polyfit
+fallback when scipy is not available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>box_sizes</strong> (<em>List</em><em>[</em><em>int</em><em>]</em>) – increasing list of integer radii (r values).</p></li>
+<li><p><strong>box_counts</strong> (<em>List</em><em>[</em><em>int</em><em>]</em>) – corresponding cumulative counts N(r) for each radius.</p></li>
+<li><p><strong>min_points</strong> (<em>int</em>) – minimum number of valid (positive) points required to fit.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(D, r2) where D is the slope of the log-log fit and r2 is the coefficient
+of determination (in log space). Returns (nan, nan) if insufficient data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[float, float]</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">D</span><span class="p">,</span> <span class="n">r2</span> <span class="o">=</span> <span class="n">fit_fractal_dimension</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">10</span><span class="p">,</span><span class="mi">40</span><span class="p">,</span><span class="mi">100</span><span class="p">])</span>
+</pre></div>
+</div>
 </dd></dl>
 
 </section>
@@ -674,6 +733,7 @@ Defaults to “<a class="reference external" href="http://localhost:7474/browser
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
 <li><a class="reference internal" href="#module-src.analysis.fractal_analysis">src.analysis.fractal_analysis module</a><ul>
 <li><a class="reference internal" href="#src.analysis.fractal_analysis.calculate_fractal_dimension"><code class="docutils literal notranslate"><span class="pre">calculate_fractal_dimension()</span></code></a></li>
+<li><a class="reference internal" href="#src.analysis.fractal_analysis.fit_fractal_dimension"><code class="docutils literal notranslate"><span class="pre">fit_fractal_dimension()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-src.analysis.graph_analysis">src.analysis.graph_analysis module</a><ul>
