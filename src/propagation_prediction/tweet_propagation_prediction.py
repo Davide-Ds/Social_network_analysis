@@ -121,7 +121,7 @@ def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph_Twe
 # =========================================
 # 3. Load dataset (user, tweet, delay)
 # =========================================
-def load_training_data(driver, limit=200000):
+def load_training_data(driver, limit=200000): #TODO: adjust limit as needed, remove for full data
     """
     Load training examples (user, tweet text, delay) from Neo4j.
 
@@ -154,7 +154,7 @@ def load_training_data(driver, limit=200000):
 # =========================================
 # 4. Text preprocessing (TF-IDF + SVD) and feature build
 # =========================================
-def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, svd_components=128, negative_ratio=0.0, random_state=42):
+def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, svd_components=128, negative_ratio=0.0, random_state=42): #TODO: negative ratio aggiustare
     """
     Construct features and prepare datasets for the classifier and regressor.
 
@@ -470,7 +470,7 @@ def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patienc
 # =========================================
 # 7. Final evaluation
 # =========================================
-def evaluate_model(model, tensors, batch_size=512):
+def evaluate_model(model, tensors, batch_size=512): #TODO:evaluate on an independent test set
     """
     Evaluate the regression model on the validation set and return metrics on the original minutes scale.
 
@@ -510,7 +510,7 @@ def evaluate_model(model, tensors, batch_size=512):
     medae = np.median(np.abs(y_true - y_pred))
     return {"mse": float(mse), "r2": float(r2), "mae": float(mae), "medae": float(medae)}
 
-
+#TODO: riaddestrare su tutto il dataset prima della predizione globale
 # =========================================
 # 8. Global prediction function (predict delay in minutes)
 # =========================================
@@ -574,7 +574,7 @@ def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorize
 
 
 # Predict expected number of retweets for a given tweet
-def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, cutoff_minutes=1440):
+def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, cutoff_minutes=1440): #valutare se togliere cutoff
     """
     Estimate expected number of retweets for a tweet.
 
@@ -619,7 +619,7 @@ def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer
 # =========================================
 # 9. Usage example
 # =========================================
-def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0, classifier_cv_folds=0):
+def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0, classifier_cv_folds=0):#perche negative ratio 1.0? Tutti negativi? mettere 0.5 
     """
     High-level pipeline wrapping the whole propagation prediction flow.
 
