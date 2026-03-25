@@ -1,5 +1,5 @@
 # Social Network Analysis
-Machine Lerning course project: social-network analysis and propagation detection using Neo4j and machine learning.
+Machine Learning course project, University of Bari "Aldo Moro".
 
 ## Overview
 This repository implements a pipeline to import Twitter data into a Neo4j graph, perform graph analysis (diffusion, PageRank, fractal and Möbius analyses), compute node embeddings (GraphSAGE + text embeddings), run link-prediction experiments, train a text-based fake-news classifier, detect user communities (Leiden), and run tweet propagation prediction models.
