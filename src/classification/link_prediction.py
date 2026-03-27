@@ -1,5 +1,11 @@
 import numpy as np
 import random
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_validate
+from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
+from utils.neo4j_utils import compute_and_save_tweet_embeddings
+from analysis.graph_analysis import create_complete_gds_graph
 
 
 def generate_graphsage_embeddings(driver, graph_name: str, model_name: str, dim: int = 128, node_label: str = "User"):
@@ -218,3 +224,134 @@ def build_link_prediction_dataset(
     y = np.array(y, dtype=np.int32)
 
     return X, y
+
+
+def run_link_prediction(driver, cross_validation_folds=5):
+    """
+    Execute the complete link prediction workflow (Task 3).
+    
+    This function:
+    1. Computes text embeddings for tweets if not already present.
+    2. Creates a complete GDS graph with User and Tweet nodes.
+    3. Generates GraphSAGE embeddings for User and Tweet nodes.
+    4. Builds a link prediction dataset from positive/negative pairs.
+    5. Trains a Random Forest classifier.
+    6. Evaluates the model with metrics and cross-validation.
+    
+    Args:
+        driver (neo4j.Driver): Neo4j driver instance.
+    
+    Returns:
+        None
+    """
+    
+    print("\nRunning Link Prediction using GraphSAGE embeddings...")
+    print("Computing embeddings for tweets using all-MiniLM-L6-v2 model if not already present...")
+    
+    # Check if tweet embeddings exist
+    if not driver.session().run("MATCH (t:Tweet) WHERE t.text_embedding IS NOT NULL RETURN t LIMIT 1").single():
+        compute_and_save_tweet_embeddings(driver, model_name='all-MiniLM-L6-v2', text_property='text', embedding_property='text_embedding')
+    
+    print("Creating complete GDS graph with User and Tweet nodes...")
+    create_complete_gds_graph(driver)
+    
+    # ---------------------------
+    # Step 1: Generate embeddings
+    # ---------------------------
+    print("\nGenerating GraphSAGE embeddings for Users...")
+    user_sage_result = driver.session().run("CALL gds.model.exists('UserSAGE') YIELD exists RETURN exists").single()
+    if user_sage_result is not None and user_sage_result.value():
+        driver.session().run("CALL gds.model.drop('UserSAGE')")
+    user_embeddings = generate_graphsage_embeddings(
+        driver,
+        graph_name="fullGraph_analysis",
+        model_name="UserSAGE",
+        dim=128,
+        node_label="User"
+    )
+    
+    print("\nGenerating GraphSAGE embeddings for Tweets...")
+    tweet_sage_result = driver.session().run("CALL gds.model.exists('TweetSAGE') YIELD exists RETURN exists").single()
+    if tweet_sage_result is not None and tweet_sage_result.value():
+        driver.session().run("CALL gds.model.drop('TweetSAGE')")
+    tweet_embeddings = generate_graphsage_embeddings(
+        driver,
+        graph_name="fullGraph_analysis",
+        model_name="TweetSAGE",
+        dim=128,
+        node_label="Tweet"
+    )
+    
+    # ---------------------------
+    # Step 2: Build link prediction dataset
+    # ---------------------------
+    print("\nBuilding link prediction dataset...")
+    X, y = build_link_prediction_dataset(driver, user_embeddings, tweet_embeddings)
+    
+    # ---------------------------
+    # Step 3: Train-test split
+    # ---------------------------
+    print("\nSplitting dataset into train and test sets...")
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    
+    # ---------------------------
+    # Step 4: Train classifier
+    # ---------------------------
+    print("\nTraining Random Forest classifier...")
+    clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+    print(f"\nTraining samples: {len(y_train)}, Test samples: {len(y_test)}")
+    print("\nFitting model...")
+    clf.fit(X_train, y_train)
+    
+    # ---------------------------
+    # Step 5: Predict and evaluate
+    # ---------------------------
+    
+    # Evaluation on training set
+    y_train_pred = clf.predict(X_train)
+    train_f1 = f1_score(y_train, y_train_pred)
+    train_acc = accuracy_score(y_train, y_train_pred)
+    
+    # Evaluation on test set
+    y_test_pred = clf.predict(X_test)
+    test_f1 = f1_score(y_test, y_test_pred)
+    test_acc = accuracy_score(y_test, y_test_pred)
+    
+    print("\nMetrics confrontation:")
+    print(f"\nTraining set - F1-score: {train_f1:.4f}, Accuracy: {train_acc:.4f}")
+    print(f"\nTest set     - F1-score: {test_f1:.4f}, Accuracy: {test_acc:.4f}")
+    print("\nEvaluating model...")
+    y_pred = clf.predict(X_test)
+    
+    # Compute metrics
+    metrics = {
+        "F1-score": [f1_score(y_test, y_pred)],
+        "Accuracy": [accuracy_score(y_test, y_pred)],
+        "Precision": [precision_score(y_test, y_pred)],
+        "Recall": [recall_score(y_test, y_pred)]
+    }
+    
+    df_metrics = pd.DataFrame(metrics)
+    print("\nEvaluation Metrics:\n")
+    print(df_metrics.to_string(index=False))
+    
+    # Confusion Matrix
+    print("\nConfusion Matrix:\n")
+    print(confusion_matrix(y_test, y_pred))
+    
+
+    if cross_validation_folds > 1:
+        print("\nPerforming {}-fold cross-validation...".format(cross_validation_folds))
+        cv = StratifiedKFold(n_splits=cross_validation_folds, shuffle=True, random_state=42)
+        
+        scoring = ['accuracy', 'f1', 'precision', 'recall']
+        results = cross_validate(clf, X, y, cv=cv, scoring=scoring, return_train_score=False)
+        
+        # Print scores for each fold and their averages
+        print("\nCross-validation results:")
+        for metric in scoring:
+            scores = results[f'test_{metric}']
+            print(f"{metric.capitalize()} per fold: {scores}")
+            print(f"{metric.capitalize()} medio: {scores.mean():.4f} (+/- {scores.std():.4f})")
