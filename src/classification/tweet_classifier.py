@@ -77,6 +77,80 @@ def build_dataset(tweets: dict) -> Tuple[List[str], List[int]]:
     return texts, labels
 
 
+def bootstrap_confidence_intervals(
+    y_true,
+    y_pred,
+    n_bootstrap: int = 1000,
+    alpha: float = 0.95,
+    random_state: int = 42
+):
+    """
+    Compute bootstrap confidence intervals for Accuracy and F1-macro.
+    """
+
+    rng = np.random.RandomState(random_state)
+
+    acc_scores = []
+    f1_scores = []
+
+    n = len(y_true)
+
+    for _ in range(n_bootstrap):
+
+        indices = rng.choice(
+            n,
+            size=n,
+            replace=True
+        )
+
+        y_t = y_true[indices]
+        y_p = y_pred[indices]
+
+        acc_scores.append(
+            accuracy_score(y_t, y_p)
+        )
+
+        f1_scores.append(
+            f1_score(
+                y_t,
+                y_p,
+                average="macro"
+            )
+        )
+
+    def compute_ci(scores):
+
+        lower = np.percentile(
+            scores,
+            (1 - alpha) / 2 * 100
+        )
+
+        upper = np.percentile(
+            scores,
+            (1 + alpha) / 2 * 100
+        )
+
+        mean = np.mean(scores)
+
+        return mean, lower, upper
+
+    acc_mean, acc_low, acc_high = compute_ci(acc_scores)
+    f1_mean, f1_low, f1_high = compute_ci(f1_scores)
+
+    return {
+        "accuracy": (
+            acc_mean,
+            acc_low,
+            acc_high
+        ),
+        "f1_macro": (
+            f1_mean,
+            f1_low,
+            f1_high
+        )
+    }
+
+
 def train_and_evaluate(path_source_tweets: str, path_labels: str, artifacts_dir: str = "artifacts") -> None:
     """
     Train a Logistic Regression classifier on tweet data and evaluate performance.
@@ -121,16 +195,36 @@ def train_and_evaluate(path_source_tweets: str, path_labels: str, artifacts_dir:
 
     # Predictions and evaluation
     y_pred = clf.predict(X_test)
+        # Bootstrap confidence intervals
+    ci_results = bootstrap_confidence_intervals(
+        y_test,
+        y_pred,
+        n_bootstrap=1000
+    )
+
+    acc_mean, acc_low, acc_high = ci_results["accuracy"]
+    f1_mean, f1_low, f1_high = ci_results["f1_macro"]
+
+    bootstrap_text = (
+        "\nBootstrap Confidence Intervals (95%)\n"
+        f"Accuracy: {acc_mean:.4f} "
+        f"[{acc_low:.4f}, {acc_high:.4f}]\n"
+        f"F1-macro: {f1_mean:.4f} "
+        f"[{f1_low:.4f}, {f1_high:.4f}]\n"
+    )
+
+    print(bootstrap_text)
     print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}, F1-score: {f1_score(y_test, y_pred):.4f}")
     print(classification_report(y_test, y_pred, target_names=["real", "fake"]))
 
     # Save artifacts: model, vectorizer, report, confusion matrix
     joblib.dump(clf, os.path.join(artifacts_dir, "model_logreg.joblib"))
     joblib.dump(vectorizer, os.path.join(artifacts_dir, "tfidf_vectorizer.joblib"))
-
+    
     with open(os.path.join(artifacts_dir, "classification_report.txt"), "w", encoding="utf-8") as f:
         report_str = classification_report(y_test, y_pred, target_names=["real", "fake"])
         f.write(str(report_str))
+        f.write(bootstrap_text)
 
     with open(os.path.join(artifacts_dir, "confusion_matrix.json"), "w", encoding="utf-8") as f:
         json.dump(
