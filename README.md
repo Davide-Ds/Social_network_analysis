@@ -60,7 +60,7 @@ Instructions:
 Note: example credentials are intentionally omitted from the README; configure them locally via environment variables.
 
 ## Data
-- Datasets: `data/twitter16/` (or `twitter15/`)
+- Datasets: `data/twitter16/`
 	- `source_tweets.txt` — `tweet_id<TAB>text`
 	- `label.txt` — `label:tweet_id`
 	- `tree/` — propagation tree files used to derive RETWEET/QUOTE/INTERACTION relationships
@@ -93,7 +93,7 @@ Modes prompted by the script:
 
 ## How to reproduce experiments
 1. Start Neo4j with APOC & GDS plugins enabled.
-2. Place dataset files in `data/twitter16/` (or `twitter15/`).
+2. Place dataset files in `data/twitter16/`.
 3. Set Neo4j environment variables and run `python src/main.py`, choose mode `1` to import, then `2`/`3`/`4` etc.
 
 ## Contributing

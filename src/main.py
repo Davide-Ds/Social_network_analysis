@@ -193,7 +193,7 @@ def main(mode):
     if mode == 6:
         print("\nRunning tweet propagation prediction with Neural Networks...")
         tweet = "Elon Musk went to Mars on his Tesla cybertruck"
-        tweet_propagation_prediction_NN(driver, tweet,classifier_cv_folds=5)
+        tweet_propagation_prediction_NN(driver, tweet, classifier_cv_folds=5, top_k=20)  # Set classifier_cv_folds to 0 to skip CV and just train/test split, increase to 5 or 10 for better results. Set top_k to desired number of top users to predict.
 
 
     # ----------------------------

@@ -121,7 +121,7 @@ def generate_user_embeddings(driver, embedding_dim=64, graph_name="userGraph_Twe
 # =========================================
 # 3. Load dataset (user, tweet, delay)
 # =========================================
-def load_training_data(driver, limit=200000): #TODO: adjust limit as needed, remove for full data
+def load_training_data(driver, limit=200000): #default 200k for performance, adjust limit as needed when calling the funcion, remove for full data
     """
     Load training examples (user, tweet text, delay) from Neo4j.
 
@@ -154,7 +154,7 @@ def load_training_data(driver, limit=200000): #TODO: adjust limit as needed, rem
 # =========================================
 # 4. Text preprocessing (TF-IDF + SVD) and feature build
 # =========================================
-def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, svd_components=128, negative_ratio=0.0, random_state=42): #TODO: negative ratio aggiustare
+def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, svd_components=128, negative_ratio=1, random_state=42): #negative ratio wtr to positives, e.g. 1.0 means equal number of negatives and positives, 0.5 means half as many negatives as positives, 0 all positives and no classifier
     """
     Construct features and prepare datasets for the classifier and regressor.
 
@@ -215,8 +215,10 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
     X = np.hstack([X_user, X_text])
 
     # classification dataset with negative sampling
+    X_clf = None
+    y_clf = None
     clf_tensors = {}
-    if negative_ratio and negative_ratio > 0.0:
+    if negative_ratio > 0:
         rng = np.random.RandomState(random_state)
         pos_count = X.shape[0]
         neg_count = int(pos_count * negative_ratio)
@@ -239,42 +241,56 @@ def build_features_and_dataset(data, user_embeddings, tfidf_max_features=5000, s
         # store full classifier dataset for stratified CV
         X_clf_full = X_clf.copy()
         y_clf_full = y_clf.copy()
-        
-        X_clf_train, X_clf_val, y_clf_train, y_clf_val = train_test_split(X_clf, y_clf, test_size=0.2, random_state=random_state, stratify=y_clf)
+        clf_tensors['X_clf_full'] = X_clf_full  # type: ignore
+        clf_tensors['y_clf_full'] = y_clf_full  # type: ignore
 
-        clf_tensors = {
+    # split for regression (only positives) - create independent test set (70% train, 15% val, 15% test)
+    X_train_temp, X_test, y_train_temp, y_test = train_test_split(
+        X, y_delay, test_size=0.15, random_state=random_state
+    )
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_train_temp, y_train_temp, test_size=0.176, random_state=random_state  # 0.176 ≈ 15/85
+    )
+
+    # same for classifier if present
+    clf_train_tensors = {}
+    if negative_ratio > 0:
+        X_clf_train_temp, X_clf_test, y_clf_train_temp, y_clf_test = train_test_split(
+            X_clf, y_clf, test_size=0.15, random_state=random_state, stratify=y_clf
+        )
+        X_clf_train, X_clf_val, y_clf_train, y_clf_val = train_test_split(
+            X_clf_train_temp, y_clf_train_temp, test_size=0.176, random_state=random_state, stratify=y_clf_train_temp
+        )
+        clf_train_tensors = {
             'X_clf_train_t': torch.tensor(X_clf_train, dtype=torch.float32),
             'X_clf_val_t': torch.tensor(X_clf_val, dtype=torch.float32),
             'y_clf_train_t': torch.tensor(y_clf_train, dtype=torch.float32).unsqueeze(1),
-            'y_clf_val_t': torch.tensor(y_clf_val, dtype=torch.float32).unsqueeze(1)
+            'y_clf_val_t': torch.tensor(y_clf_val, dtype=torch.float32).unsqueeze(1),
+            'X_clf_test_t': torch.tensor(X_clf_test, dtype=torch.float32),
+            'y_clf_test_t': torch.tensor(y_clf_test, dtype=torch.float32).unsqueeze(1)
         }
-        # expose full arrays for CV
-        clf_tensors['X_clf_full'] = X_clf_full # type: ignore
-        clf_tensors['y_clf_full'] = y_clf_full # type: ignore
-
-    # split for regression (only positives)
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y_delay, test_size=0.2, random_state=random_state
-    )
 
     tensors = {
         "X_train_t": torch.tensor(X_train, dtype=torch.float32),
         "X_val_t": torch.tensor(X_val, dtype=torch.float32),
+        "X_test_t": torch.tensor(X_test, dtype=torch.float32),
         "y_delay_train_t": torch.tensor(y_train, dtype=torch.float32).unsqueeze(1),
         "y_delay_val_t": torch.tensor(y_val, dtype=torch.float32).unsqueeze(1),
+        "y_delay_test_t": torch.tensor(y_test, dtype=torch.float32).unsqueeze(1),
         "vectorizer": vectorizer,
         "svd": svd,
         "scaler_text": scaler_text,
         "filtered_data": data
     }
     tensors.update(clf_tensors)
+    tensors.update(clf_train_tensors)
     return tensors
 
 
 # =========================================
 # 5. Model definition (regression on log1p(delay))
 # =========================================
-class PropagationModel(nn.Module):
+class Propagation_regression_Model(nn.Module):
     """
     Regression model predicting log1p(delay) for a user-tweet pair.
 
@@ -329,7 +345,7 @@ class ClassifierModel(nn.Module):
 # =========================================
 # 6. Training and validation (MSE on log1p delay)
 # =========================================
-def train_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
+def train_regression_model(model, tensors, epochs=10, lr=1e-3, batch_size=256, patience=5):
     """
     Train the regression model using minibatches and SmoothL1 (Huber) loss.
 
@@ -470,14 +486,15 @@ def train_classifier(model, tensors, epochs=10, lr=1e-3, batch_size=256, patienc
 # =========================================
 # 7. Final evaluation
 # =========================================
-def evaluate_model(model, tensors, batch_size=512): #TODO:evaluate on an independent test set
+def evaluate_regression_model(model, tensors, batch_size=512, use_test_set=False):
     """
-    Evaluate the regression model on the validation set and return metrics on the original minutes scale.
+    Evaluate the regression model on validation or test set and return metrics on the original minutes scale.
 
     Args:
         model (nn.Module): trained regression model that outputs log1p(delay).
         tensors (dict): dataset tensors produced by build_features_and_dataset.
         batch_size (int): evaluation batch size.
+        use_test_set (bool): if True, evaluate on test set; otherwise on validation set.
 
     Returns:
         dict with keys: mse, r2, mae, medae — all computed on original delay scale (minutes).
@@ -487,13 +504,16 @@ def evaluate_model(model, tensors, batch_size=512): #TODO:evaluate on an indepen
         - MSE is sensitive to large outliers; median absolute error (medae) is more robust.
     """
     model.eval()
-    val_ds = TensorDataset(tensors["X_val_t"], tensors["y_delay_val_t"])
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+    if use_test_set:
+        eval_ds = TensorDataset(tensors["X_test_t"], tensors["y_delay_test_t"])
+    else:
+        eval_ds = TensorDataset(tensors["X_val_t"], tensors["y_delay_val_t"])
+    eval_loader = DataLoader(eval_ds, batch_size=batch_size, shuffle=False)
 
     preds = []
     trues = []
     with torch.no_grad():
-        for xb, yb in val_loader:
+        for xb, yb in eval_loader:
             out = model(xb).numpy().ravel()
             preds.append(out)
             trues.append(yb.numpy().ravel())
@@ -510,11 +530,10 @@ def evaluate_model(model, tensors, batch_size=512): #TODO:evaluate on an indepen
     medae = np.median(np.abs(y_true - y_pred))
     return {"mse": float(mse), "r2": float(r2), "mae": float(mae), "medae": float(medae)}
 
-#TODO: riaddestrare su tutto il dataset prima della predizione globale
 # =========================================
 # 8. Global prediction function (predict delay in minutes)
 # =========================================
-def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, top_k=5):
+def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, top_k=10):
     """
     Predict top-k users likely to retweet soon for a given tweet.
 
@@ -574,20 +593,20 @@ def predict_global_propagation(model_reg, user_embeddings, tweet_text, vectorize
 
 
 # Predict expected number of retweets for a given tweet
-def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None, cutoff_minutes=1440): #valutare se togliere cutoff
+def predict_expected_retweets(user_embeddings, tweet_text, vectorizer, svd, scaler_text, model_clf=None):
     """
     Estimate expected number of retweets for a tweet.
 
     Strategy:
         - If classifier available: sum predicted probabilities across users (expected value of retweet count).
-        - Otherwise: use the regressor to predict delays and count users whose predicted delay <= cutoff_minutes.
+        - Otherwise: use the regressor to predict delays and count all users (assuming they all retweet eventually).
 
     Returns:
-        dict with either {'expected_retweets': float} or {'predicted_retweeters_count': int, 'cutoff_minutes': int}.
+        dict with either {'expected_retweets': float} or {'predicted_retweeters_count': int}.
 
     Notes:
         - When summing probabilities, consider calibrating classifier probabilities for better absolute counts.
-        - The cutoff-based fallback is a crude heuristic and depends on chosen cutoff_minutes.
+        - The regressor-based fallback simply counts all users as potential retweeters.
     """
     t_vec = vectorizer.transform([tweet_text])
     t_vec = svd.transform(t_vec)[0]
@@ -603,23 +622,15 @@ def predict_expected_retweets(model_reg, user_embeddings, tweet_text, vectorizer
                 total_prob += p
         return {"expected_retweets": float(total_prob)}
     else:
-        # fallback: use regressor to predict delay and count those within cutoff
-        count = 0
-        with torch.no_grad():
-            for u_id, u_emb in user_embeddings.items():
-                u = u_emb / (np.linalg.norm(u_emb) + 1e-12)
-                x = np.hstack([u, t_vec])
-                log_delay = model_reg(torch.tensor(x, dtype=torch.float32).unsqueeze(0)).item()
-                delay = float(np.expm1(log_delay))
-                if delay <= cutoff_minutes:
-                    count += 1
-        return {"predicted_retweeters_count": int(count), "cutoff_minutes": cutoff_minutes}
+        # fallback: count all users as potential retweeters
+        count = len(user_embeddings)
+        return {"predicted_retweeters_count": int(count)}
 
 
 # =========================================
 # 9. Usage example
 # =========================================
-def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1.0, classifier_cv_folds=0):#perche negative ratio 1.0? Tutti negativi? mettere 0.5 
+def tweet_propagation_prediction_NN(driver, tweet_text, limit=1500000, embedding_dim=64, svd_components=128, tfidf_max_features=5000, epochs=10, batch_size=256, negative_ratio=1, classifier_cv_folds=0, top_k=10): #negative ratio 1 same number of positive and negative examples
     """
     High-level pipeline wrapping the whole propagation prediction flow.
 
@@ -633,11 +644,11 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
     # load & prepare data (include negative samples for classifier)
     tensors = build_features_and_dataset(load_training_data(driver, limit=limit), user_embeddings, tfidf_max_features=tfidf_max_features, svd_components=svd_components, negative_ratio=negative_ratio)
     data = tensors['filtered_data']
-    print(f"Loaded dataset: {len(data)} positive examples")
+    print(f"Loaded dataset: {len(data)} examples")
 
     # classifier CV if requested
     clf = None
-    if negative_ratio > 0.0 and classifier_cv_folds and classifier_cv_folds > 1:
+    if negative_ratio > 0 and classifier_cv_folds and classifier_cv_folds > 1:
         print(f"Running stratified {classifier_cv_folds}-fold CV for classifier...")
         cv_res = stratified_kfold_cv_classifier(tensors, n_splits=classifier_cv_folds, epochs=epochs, batch_size=batch_size, lr=1e-3, patience=5)
         # format summary numeric values to 4 decimal places
@@ -645,7 +656,7 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
         print("Classifier CV summary:", fmt_summary)
 
     # train classifier
-    if negative_ratio > 0.0:
+    if negative_ratio > 0:
         input_dim = tensors['X_clf_train_t'].shape[1]
         clf = ClassifierModel(input_dim)
         clf = train_classifier(clf, tensors, epochs=epochs, batch_size=batch_size)
@@ -654,23 +665,42 @@ def tweet_propagation_prediction_NN(driver, tweet_text, limit=15000, embedding_d
 
     # train regressor on positives
     input_dim = tensors["X_train_t"].shape[1]
-    reg = PropagationModel(input_dim)
-    reg = train_model(reg, tensors, epochs=epochs, batch_size=batch_size)
+    reg = Propagation_regression_Model(input_dim)
+    reg = train_regression_model(reg, tensors, epochs=epochs, batch_size=batch_size)
 
-    metrics = evaluate_model(reg, tensors)
-    print("\n=== Final evaluation (regressor) ===")
-    # print metrics with 4 decimal places
-    print(f"MSE: {metrics['mse']:.4f}, R2: {metrics['r2']:.4f}, MAE: {metrics['mae']:.4f}, MedAE: {metrics['medae']:.4f}")
+    # Evaluate on validation set
+    metrics_val = evaluate_regression_model(reg, tensors, use_test_set=False)
+    print("\n=== Validation set evaluation (regressor) ===")
+    print(f"MSE: {metrics_val['mse']:.4f}, R2: {metrics_val['r2']:.4f}, MAE: {metrics_val['mae']:.4f}, MedAE: {metrics_val['medae']:.4f}")
+    
+    # Evaluate on test set
+    metrics_test = evaluate_regression_model(reg, tensors, use_test_set=True)
+    print("\n=== Test set evaluation (regressor) ===")
+    print(f"MSE: {metrics_test['mse']:.4f}, R2: {metrics_test['r2']:.4f}, MAE: {metrics_test['mae']:.4f}, MedAE: {metrics_test['medae']:.4f}")
 
-    # compute expected retweets using classifier (if available) or regressor fallback
-    expected = predict_expected_retweets(reg, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf)
+    # Retrain on full dataset (train+val+test) before global prediction
+    print("\n=== Retraining on full dataset before prediction ===")
+    X_full = np.vstack([tensors['X_train_t'].numpy(), tensors['X_val_t'].numpy(), tensors['X_test_t'].numpy()])
+    y_full = np.vstack([tensors['y_delay_train_t'].numpy(), tensors['y_delay_val_t'].numpy(), tensors['y_delay_test_t'].numpy()])
+    tensors_full = {
+        'X_train_t': torch.tensor(X_full, dtype=torch.float32),
+        'X_val_t': torch.tensor(X_full, dtype=torch.float32),  # use full data as both train and val  
+        'y_delay_train_t': torch.tensor(y_full, dtype=torch.float32),
+        'y_delay_val_t': torch.tensor(y_full, dtype=torch.float32)
+    }
+    reg_full = Propagation_regression_Model(X_full.shape[1])
+    reg_full = train_regression_model(reg_full, tensors_full, epochs=epochs, batch_size=batch_size)
+    print("Retraining completed.")
+
+    # compute expected retweets using classifier (if available) or regressor
+    expected = predict_expected_retweets(user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf)
     if "expected_retweets" in expected:
-        print(f"Estimated expected retweets (sum of probabilities): {expected['expected_retweets']:.4f}")
+        print(f"\nEstimated expected retweets (sum of probabilities): {expected['expected_retweets']:.4f}")
     else:
-        print(f"Estimated number of retweeters within {expected.get('cutoff_minutes', 1440)} minutes: {expected.get('predicted_retweeters_count')}")
+        print(f"\nEstimated expected retweets (regressor fallback): {expected['predicted_retweeters_count']}")
 
-    # example prediction using classifier + regressor
-    res = predict_global_propagation(reg, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf, top_k=5)
+    # example prediction using classifier + retrained regressor
+    res = predict_global_propagation(reg_full, user_embeddings, tweet_text, tensors["vectorizer"], tensors["svd"], tensors["scaler_text"], model_clf=clf, top_k=top_k)
     print("\n=== Global prediction ===")
     print(f"Top users predicted to retweet soon (user_id, prob, predicted_delay_minutes):")
     for u, p, d in res["top_users"]:
