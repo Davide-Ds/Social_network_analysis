@@ -498,89 +498,8 @@ about their tweets and retweets.</p>
 </dd></dl>
 
 </section>
-<section id="module-src.analysis.link_prediction">
-<span id="src-analysis-link-prediction-module"></span><h2>src.analysis.link_prediction module<a class="headerlink" href="#module-src.analysis.link_prediction" title="Link to this heading">¶</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="src.analysis.link_prediction.build_link_prediction_dataset">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.link_prediction.</span></span><span class="sig-name descname"><span class="pre">build_link_prediction_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tweet_embeddings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">negative_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/link_prediction.html#build_link_prediction_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.link_prediction.build_link_prediction_dataset" title="Link to this definition">¶</a></dt>
-<dd><p>Builds a dataset for link prediction (User -&gt; Tweet) using node embeddings.</p>
-<p>This function constructs a supervised learning dataset for the link prediction task,
-where the goal is to predict whether a user will retweet a tweet. It generates
-positive samples (existing RETWEET relationships) and negative samples (user-tweet
-pairs without a RETWEET relationship), and creates feature vectors by concatenating
-the embeddings of the user and the tweet.</p>
-<p>The function queries the Neo4j database to extract all positive pairs, identifies
-active users and popular tweets for more challenging negative sampling, and ensures
-reproducibility via a random seed. The resulting dataset can be used to train and
-evaluate machine learning models for link prediction.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>driver</strong> (<em>neo4j.Driver</em>) – An active Neo4j driver instance for database connection.</p></li>
-<li><p><strong>user_embeddings</strong> (<em>dict</em>) – Dictionary mapping user_id (str or int) to their embedding vector (np.ndarray).</p></li>
-<li><p><strong>tweet_embeddings</strong> (<em>dict</em>) – Dictionary mapping tweet_id (str or int) to their embedding vector (np.ndarray).</p></li>
-<li><p><strong>negative_ratio</strong> (<em>float</em><em>, </em><em>optional</em>) – Ratio of negative samples to positive samples.
-For example, 1.0 means the same number of negatives as positives. Default is 1.0.</p></li>
-<li><p><strong>random_seed</strong> (<em>int</em><em>, </em><em>optional</em>) – Random seed for reproducibility of negative sampling. Default is 42.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><dl class="simple">
-<dt>X (np.ndarray):</dt><dd><p>Feature matrix of shape (n_samples, embedding_dim * 2), where each row is the
-concatenation of a user and tweet embedding.</p>
-</dd>
-<dt>y (np.ndarray):</dt><dd><p>Label vector of shape (n_samples,), where 1 indicates a positive (RETWEET exists)
-and 0 indicates a negative (no RETWEET).</p>
-</dd>
-</dl>
-</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>tuple</p>
-</dd>
-</dl>
-<p class="rubric">Example</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">build_link_prediction_dataset</span><span class="p">(</span><span class="n">driver</span><span class="p">,</span> <span class="n">user_embeddings</span><span class="p">,</span> <span class="n">tweet_embeddings</span><span class="p">,</span> <span class="n">negative_ratio</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
-</pre></div>
-</div>
-<p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Positive pairs are all (user, tweet) pairs with a RETWEET relationship in the graph.</p></li>
-<li><p>Negative pairs are sampled from active users and popular tweets, excluding existing RETWEETs.</p></li>
-<li><p>The function prints progress and dataset statistics for transparency.</p></li>
-</ul>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="src.analysis.link_prediction.generate_graphsage_embeddings">
-<span class="sig-prename descclassname"><span class="pre">src.analysis.link_prediction.</span></span><span class="sig-name descname"><span class="pre">generate_graphsage_embeddings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_label</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'User'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/link_prediction.html#generate_graphsage_embeddings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.link_prediction.generate_graphsage_embeddings" title="Link to this definition">¶</a></dt>
-<dd><p>Generate GraphSAGE embeddings for nodes of a given type in the Neo4j graph.</p>
-<p>This updated version will sanitize numeric feature properties (e.g. pagerank) by
-setting NULL or NaN values to 0 before calling the GDS procedures. It also wraps
-train/stream calls with try/except to provide clearer diagnostics when the GDS
-procedures fail due to invalid feature values.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>driver</strong> (<em>neo4j.Driver</em>) – Neo4j driver instance.</p></li>
-<li><p><strong>graph_name</strong> (<em>str</em>) – Name of the in-memory GDS graph.</p></li>
-<li><p><strong>model_name</strong> (<em>str</em>) – Name for the embedding model.</p></li>
-<li><p><strong>dim</strong> (<em>int</em>) – Embedding dimension.</p></li>
-<li><p><strong>node_label</strong> (<em>str</em>) – Label of nodes to embed (“User” or “Tweet”).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Dictionary mapping node IDs to embedding vectors (numpy arrays).</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-<p class="rubric">Example</p>
-<p>embeddings = generate_graphsage_embeddings(driver, “myGraph”, “UserSAGE”, 128, node_label=”User”)
-user_emb = embeddings[user_id]</p>
-</dd></dl>
-
+<section id="src-analysis-link-prediction-module">
+<h2>src.analysis.link_prediction module<a class="headerlink" href="#src-analysis-link-prediction-module" title="Link to this heading">¶</a></h2>
 </section>
 <section id="module-src.analysis.moebius_analysis">
 <span id="src-analysis-moebius-analysis-module"></span><h2>src.analysis.moebius_analysis module<a class="headerlink" href="#module-src.analysis.moebius_analysis" title="Link to this heading">¶</a></h2>
@@ -749,11 +668,7 @@ Defaults to “<a class="reference external" href="http://localhost:7474/browser
 <li><a class="reference internal" href="#src.analysis.graph_analysis.get_top_fake_news_creators"><code class="docutils literal notranslate"><span class="pre">get_top_fake_news_creators()</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#module-src.analysis.link_prediction">src.analysis.link_prediction module</a><ul>
-<li><a class="reference internal" href="#src.analysis.link_prediction.build_link_prediction_dataset"><code class="docutils literal notranslate"><span class="pre">build_link_prediction_dataset()</span></code></a></li>
-<li><a class="reference internal" href="#src.analysis.link_prediction.generate_graphsage_embeddings"><code class="docutils literal notranslate"><span class="pre">generate_graphsage_embeddings()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#src-analysis-link-prediction-module">src.analysis.link_prediction module</a></li>
 <li><a class="reference internal" href="#module-src.analysis.moebius_analysis">src.analysis.moebius_analysis module</a><ul>
 <li><a class="reference internal" href="#src.analysis.moebius_analysis.MoebiusAnalyzer"><code class="docutils literal notranslate"><span class="pre">MoebiusAnalyzer</span></code></a><ul>
 <li><a class="reference internal" href="#src.analysis.moebius_analysis.MoebiusAnalyzer.close"><code class="docutils literal notranslate"><span class="pre">MoebiusAnalyzer.close()</span></code></a></li>

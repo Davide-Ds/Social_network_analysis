@@ -322,6 +322,83 @@
 
 
 
+<div class="viewcode-block" id="bootstrap_confidence_intervals">
+<a class="viewcode-back" href="../../../src.classification.html#src.classification.tweet_classifier.bootstrap_confidence_intervals">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_confidence_intervals</span><span class="p">(</span>
+    <span class="n">y_true</span><span class="p">,</span>
+    <span class="n">y_pred</span><span class="p">,</span>
+    <span class="n">n_bootstrap</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.95</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">42</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute bootstrap confidence intervals for Accuracy and F1-macro.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">random_state</span><span class="p">)</span>
+
+    <span class="n">acc_scores</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">f1_scores</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y_true</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bootstrap</span><span class="p">):</span>
+
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
+            <span class="n">n</span><span class="p">,</span>
+            <span class="n">size</span><span class="o">=</span><span class="n">n</span><span class="p">,</span>
+            <span class="n">replace</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+
+        <span class="n">y_t</span> <span class="o">=</span> <span class="n">y_true</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span>
+        <span class="n">y_p</span> <span class="o">=</span> <span class="n">y_pred</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span>
+
+        <span class="n">acc_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_t</span><span class="p">,</span> <span class="n">y_p</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="n">f1_scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">f1_score</span><span class="p">(</span>
+                <span class="n">y_t</span><span class="p">,</span>
+                <span class="n">y_p</span><span class="p">,</span>
+                <span class="n">average</span><span class="o">=</span><span class="s2">&quot;macro&quot;</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">compute_ci</span><span class="p">(</span><span class="n">scores</span><span class="p">):</span>
+
+        <span class="n">lower</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span>
+            <span class="n">scores</span><span class="p">,</span>
+            <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">100</span>
+        <span class="p">)</span>
+
+        <span class="n">upper</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span>
+            <span class="n">scores</span><span class="p">,</span>
+            <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">alpha</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">100</span>
+        <span class="p">)</span>
+
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">scores</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">mean</span><span class="p">,</span> <span class="n">lower</span><span class="p">,</span> <span class="n">upper</span>
+
+    <span class="n">acc_mean</span><span class="p">,</span> <span class="n">acc_low</span><span class="p">,</span> <span class="n">acc_high</span> <span class="o">=</span> <span class="n">compute_ci</span><span class="p">(</span><span class="n">acc_scores</span><span class="p">)</span>
+    <span class="n">f1_mean</span><span class="p">,</span> <span class="n">f1_low</span><span class="p">,</span> <span class="n">f1_high</span> <span class="o">=</span> <span class="n">compute_ci</span><span class="p">(</span><span class="n">f1_scores</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;accuracy&quot;</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">acc_mean</span><span class="p">,</span>
+            <span class="n">acc_low</span><span class="p">,</span>
+            <span class="n">acc_high</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;f1_macro&quot;</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">f1_mean</span><span class="p">,</span>
+            <span class="n">f1_low</span><span class="p">,</span>
+            <span class="n">f1_high</span>
+        <span class="p">)</span>
+    <span class="p">}</span></div>
+
+
+
 <div class="viewcode-block" id="train_and_evaluate">
 <a class="viewcode-back" href="../../../src.classification.html#src.classification.tweet_classifier.train_and_evaluate">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">train_and_evaluate</span><span class="p">(</span><span class="n">path_source_tweets</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path_labels</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">artifacts_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;artifacts&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -368,16 +445,36 @@
 
     <span class="c1"># Predictions and evaluation</span>
     <span class="n">y_pred</span> <span class="o">=</span> <span class="n">clf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_test</span><span class="p">)</span>
+        <span class="c1"># Bootstrap confidence intervals</span>
+    <span class="n">ci_results</span> <span class="o">=</span> <span class="n">bootstrap_confidence_intervals</span><span class="p">(</span>
+        <span class="n">y_test</span><span class="p">,</span>
+        <span class="n">y_pred</span><span class="p">,</span>
+        <span class="n">n_bootstrap</span><span class="o">=</span><span class="mi">1000</span>
+    <span class="p">)</span>
+
+    <span class="n">acc_mean</span><span class="p">,</span> <span class="n">acc_low</span><span class="p">,</span> <span class="n">acc_high</span> <span class="o">=</span> <span class="n">ci_results</span><span class="p">[</span><span class="s2">&quot;accuracy&quot;</span><span class="p">]</span>
+    <span class="n">f1_mean</span><span class="p">,</span> <span class="n">f1_low</span><span class="p">,</span> <span class="n">f1_high</span> <span class="o">=</span> <span class="n">ci_results</span><span class="p">[</span><span class="s2">&quot;f1_macro&quot;</span><span class="p">]</span>
+
+    <span class="n">bootstrap_text</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Bootstrap Confidence Intervals (95%)</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;Accuracy: </span><span class="si">{</span><span class="n">acc_mean</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">acc_low</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">acc_high</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">]</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;F1-macro: </span><span class="si">{</span><span class="n">f1_mean</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">f1_low</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">f1_high</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">]</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">bootstrap_text</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Accuracy: </span><span class="si">{</span><span class="n">accuracy_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span><span class="w"> </span><span class="n">y_pred</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, F1-score: </span><span class="si">{</span><span class="n">f1_score</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span><span class="w"> </span><span class="n">y_pred</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">classification_report</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">target_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;real&quot;</span><span class="p">,</span> <span class="s2">&quot;fake&quot;</span><span class="p">]))</span>
 
     <span class="c1"># Save artifacts: model, vectorizer, report, confusion matrix</span>
     <span class="n">joblib</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">clf</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">artifacts_dir</span><span class="p">,</span> <span class="s2">&quot;model_logreg.joblib&quot;</span><span class="p">))</span>
     <span class="n">joblib</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">vectorizer</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">artifacts_dir</span><span class="p">,</span> <span class="s2">&quot;tfidf_vectorizer.joblib&quot;</span><span class="p">))</span>
-
+    
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">artifacts_dir</span><span class="p">,</span> <span class="s2">&quot;classification_report.txt&quot;</span><span class="p">),</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">report_str</span> <span class="o">=</span> <span class="n">classification_report</span><span class="p">(</span><span class="n">y_test</span><span class="p">,</span> <span class="n">y_pred</span><span class="p">,</span> <span class="n">target_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;real&quot;</span><span class="p">,</span> <span class="s2">&quot;fake&quot;</span><span class="p">])</span>
         <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">report_str</span><span class="p">))</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">bootstrap_text</span><span class="p">)</span>
 
     <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">artifacts_dir</span><span class="p">,</span> <span class="s2">&quot;confusion_matrix.json&quot;</span><span class="p">),</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span>
