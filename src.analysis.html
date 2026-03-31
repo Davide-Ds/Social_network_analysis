@@ -453,8 +453,8 @@ better for PageRank.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="src.analysis.graph_analysis.get_class_stats">
 <span class="sig-prename descclassname"><span class="pre">src.analysis.graph_analysis.</span></span><span class="sig-name descname"><span class="pre">get_class_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">driver</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/src/analysis/graph_analysis.html#get_class_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#src.analysis.graph_analysis.get_class_stats" title="Link to this definition">¶</a></dt>
-<dd><p>Compute aggregate statistics for tweet classes
-(only tweets with non-null labels).</p>
+<dd><p>Statistics are computed on labeled root tweets, considering incoming
+RETWEET relationships to measure cascade size and propagation dynamics.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>driver</strong> – Neo4j driver.</p>

@@ -598,8 +598,8 @@
 <a class="viewcode-back" href="../../../src.analysis.html#src.analysis.graph_analysis.get_class_stats">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_class_stats</span><span class="p">(</span><span class="n">driver</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Compute aggregate statistics for tweet classes </span>
-<span class="sd">    (only tweets with non-null labels).</span>
+<span class="sd">    Statistics are computed on labeled root tweets, considering incoming </span>
+<span class="sd">    RETWEET relationships to measure cascade size and propagation dynamics.</span>
 <span class="sd">    </span>
 <span class="sd">    Args:</span>
 <span class="sd">        driver: Neo4j driver.</span>
@@ -611,20 +611,21 @@
 <span class="s2">    MATCH (t:Tweet)</span>
 <span class="s2">    WHERE t.tweet_label IS NOT NULL</span>
 <span class="s2">    OPTIONAL MATCH (u:User)-[r:RETWEET]-&gt;(t)</span>
-<span class="s2">    WITH t.tweet_label AS class, t, count(u) AS retweet_count, coalesce(max(r.delay), 0) AS max_delay</span>
+<span class="s2">    WITH t.tweet_label AS class, t, count(u) AS retweets_per_tweet, coalesce(percentileCont(r.delay, 0.9), 0) AS p90_delay</span>
 <span class="s2">    RETURN </span>
 <span class="s2">        class,</span>
 <span class="s2">        count(DISTINCT t) AS num_tweets,</span>
-<span class="s2">        sum(retweet_count) AS total_retweets,</span>
-<span class="s2">        round(toFloat(sum(retweet_count)) / count(DISTINCT t), 2) AS avg_retweets_per_tweet,</span>
-<span class="s2">        round(sum(max_delay)/60, 2) AS total_propagation_hours,</span>
-<span class="s2">        round(toFloat(sum(max_delay)) / count(DISTINCT t)/60, 2) AS avg_propagation_hours_per_tweet</span>
+<span class="s2">        sum(retweets_per_tweet) AS total_retweets_per_class,</span>
+<span class="s2">        round(toFloat(sum(retweets_per_tweet)) / count(DISTINCT t), 2) AS avg_retweets_per_tweet,</span>
+<span class="s2">        round(sum(p90_delay)/60, 2) AS total_p90_propagation_hours,</span>
+<span class="s2">        round(toFloat(sum(p90_delay)) / count(DISTINCT t)/60, 2) AS avg_p90_propagation_hours_per_tweet</span>
 <span class="s2">    ORDER BY num_tweets DESC</span>
 <span class="s2">    &quot;&quot;&quot;</span>
     <span class="k">with</span> <span class="n">driver</span><span class="o">.</span><span class="n">session</span><span class="p">()</span> <span class="k">as</span> <span class="n">session</span><span class="p">:</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
         <span class="n">records</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">record</span><span class="p">)</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
         <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">records</span><span class="p">)</span>
+        <span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.max_columns&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">df</span></div>
 
 
