@@ -88,9 +88,9 @@ def main(mode):
         stats = basic_statistics(driver)
         print(f"\nBasic statistics: {stats}")
 
-        print("\nRetrieving class statistics...")
+        print("\nRetrieving propagation statistics per tweet class...")
         class_statistics = get_class_stats(driver)
-        print(f"\nClass statistics:\n {class_statistics}\n")
+        print(f"\nPropagation statistics per tweet class based on RETWEET interactions:\n {class_statistics}\n")
 
         # Identify most retweeted users
         print("\nIdentifying most retweeted users...")

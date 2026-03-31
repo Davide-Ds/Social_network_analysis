@@ -333,8 +333,8 @@ def get_top_fake_news_creators(driver, top_n=10):
 
 def get_class_stats(driver):
     """
-    Compute aggregate statistics for tweet classes 
-    (only tweets with non-null labels).
+    Statistics are computed on labeled root tweets, considering incoming 
+    RETWEET relationships to measure cascade size and propagation dynamics.
     
     Args:
         driver: Neo4j driver.
@@ -346,19 +346,20 @@ def get_class_stats(driver):
     MATCH (t:Tweet)
     WHERE t.tweet_label IS NOT NULL
     OPTIONAL MATCH (u:User)-[r:RETWEET]->(t)
-    WITH t.tweet_label AS class, t, count(u) AS retweet_count, coalesce(max(r.delay), 0) AS max_delay
+    WITH t.tweet_label AS class, t, count(u) AS retweets_per_tweet, coalesce(percentileCont(r.delay, 0.9), 0) AS p90_delay
     RETURN 
         class,
         count(DISTINCT t) AS num_tweets,
-        sum(retweet_count) AS total_retweets,
-        round(toFloat(sum(retweet_count)) / count(DISTINCT t), 2) AS avg_retweets_per_tweet,
-        round(sum(max_delay)/60, 2) AS total_propagation_hours,
-        round(toFloat(sum(max_delay)) / count(DISTINCT t)/60, 2) AS avg_propagation_hours_per_tweet
+        sum(retweets_per_tweet) AS total_retweets_per_class,
+        round(toFloat(sum(retweets_per_tweet)) / count(DISTINCT t), 2) AS avg_retweets_per_tweet,
+        round(sum(p90_delay)/60, 2) AS total_p90_propagation_hours,
+        round(toFloat(sum(p90_delay)) / count(DISTINCT t)/60, 2) AS avg_p90_propagation_hours_per_tweet
     ORDER BY num_tweets DESC
     """
     with driver.session() as session:
         result = session.run(query)
         records = [dict(record) for record in result]
         df = pd.DataFrame(records)
+        pd.set_option('display.max_columns', None)
         return df
 
